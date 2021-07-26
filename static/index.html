@@ -1,0 +1,468 @@
+<!doctype HTML>
+<html lang="en">
+	<head>
+		<title>Techxercise</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>                       
+		<style>
+			:root {
+				--bg-color: #8860D0;
+				--shadow-color: #C1C8E4;
+				--color-blue: #5AB9EA;
+				--color-violet: #5680E9;
+				--color-lightblue: #84CEEB;
+			}
+			* {
+				font-family: 'Nunito', sans-serif;
+				color: var(--color-blue);
+			}
+			html, body {
+				min-width: 100%;
+				min-height: 100%;
+				margin: 0;
+				padding: 0;
+				overflow-x: hidden;
+			}
+			nav {
+				width: 100%;
+				height: 75px;
+				background-color: var(--bg-color);
+				position: fixed;
+				top: 0;
+				left: 0;
+				z-index: 10;
+			}
+			.nav-element {
+				height: 100%;
+				padding-left: 20px;
+				padding-right: 20px;
+				display: inline-block;
+				box-sizing: border-box;
+				cursor: pointer;
+				text-decoration: none;
+				-webkit-user-select: none;
+				-moz-user-select: none;
+				-ms-user-select: none;
+				user-select: none;
+				transition: background-color 0.25s ease-in-out;
+			}
+			.nav-element > p {
+				margin: 0;
+				position: relative;
+				top: 50%;
+				transform: translate(0, -50%);
+				transition: color 0.25s ease-in-out;
+			}
+			.nav-element:hover {
+				background-color: var(--color-blue);
+			}
+			.nav-element:hover > p {
+				color: var(--bg-color);
+			}
+			.nav-element:active {
+				background-color: var(--color-blue);
+			}
+			.right {
+				float: right;
+				background-color: var(--shadow-color);
+			}
+			#top {
+				width: max-content;
+				max-width: calc(100% - 50px);
+				height: calc(100vh - 75px);
+				margin-top: 75px;
+				transition: transform 0.25s ease-in-out;
+				position: relative;
+			}
+			#nodes {
+				position: absolute;
+				height: calc(100vh - 75px);
+				margin-top: 75px;
+			}
+			.vertical-center {
+				position: absolute;
+				top: 50%;
+				width: 100vw;
+				padding-left: 686px;
+				transform: translate(-50%, calc(-50% - 50px));
+			}
+			.background-img {
+				background-image: url('/static/Background.jpeg');
+				height: 627px;
+  				background-position: center;
+  				background-repeat: no-repeat;
+ 	 			background-size: cover;
+ 				position: relative;
+			}
+			.header-text {
+				font-size: 6em;
+				margin: 0;
+				top: 10%;
+				font-family: 'Nunito-Bold', sans-serif;
+				color: var(--color-blue);
+			}
+			.header-values {
+				font-size: 2em;
+				margin: 0;
+				font-family: 'Nunito-Bold', sans-serif;
+			}
+			.header {
+				font-size: 2em;
+				margin: 0;
+				margin-top: 60px;
+			}
+			.button {
+				padding-left: 50px;
+				padding-right: 50px;
+				padding-top: 15px;
+				padding-bottom: 15px;
+				border-radius: 40px;
+				margin: 5px;
+				border: 3px solid var(--color-blue);
+				background-color: var(--bg-color);
+				display: inline-block;
+				box-sizing: border-box;
+				cursor: pointer;
+				text-decoration: none;
+				-webkit-user-select: none;
+				-moz-user-select: none;
+				-ms-user-select: none;
+				user-select: none;
+				transition: background-color 0.25s ease-in-out,
+							border 0.25s ease-in-out,
+							transform 0.25s ease-in-out;
+			}
+			.square {
+				border-radius: 8px;
+				background-color: #ffffff;
+			}
+			.button > p {
+				margin: 0;
+				transition: color 0.25s ease-in-out;
+			}
+			.button > p > i {
+				transition: color 0.25s ease-in-out;
+			}
+			.button:hover {
+				background-color: var(--color-lightblue);
+				transform: scale(1.03);
+			}
+			.button:hover > p {
+				color: var(--bg-color);
+			}
+			.button:hover > p > i {
+				color: var(--bg-color);
+			}
+			.button:active {
+				background-color: var(--color-blue);
+				border: 3px solid var(--color-blue);
+				transform: scale(0.98);
+			}
+			.hide-text {
+				background-color: var(--bg-color);
+				width: 100%;
+				height: 90px;
+				z-index: 4;
+			}
+			.home-logo {
+				float: right;
+				height: 80px;
+				width: 80px;
+			}
+			.column {
+				float: left;
+				width: 33.3%;
+				min-height: 400px;	
+			}
+			.column-2 {
+				float: left;
+				width: 50%;
+				min-height: 300px;
+				align-items: center;
+			}
+			.column-3 {
+				float: left;
+				width: 50%;
+				height: 200px;
+				align-items: center;
+			}
+			.row:after {
+ 	 			content: "";
+  				display: table;
+  				clear: both;
+			}
+			.container {
+				display: inline-block;
+				background-color: var(--color-lightblue);
+				width: calc(25% - 24px);
+				min-height: 300px;
+				margin: 10px;
+				padding: 15px;
+				box-sizing: border-box;
+				vertical-align: top;
+				border: 5px solid var(--color-blue);
+				box-shadow: 0 0 25px 0 var(--shadow-color);
+				-webkit-user-select: text;
+				-moz-user-select: text;
+				-ms-user-select: text;
+				user-select: text;
+				transition: transform 0.25s ease-in-out,
+							box-shadow 0.25s ease-in-out;
+			}
+			.products-header {
+				color: var(--color-violet);
+				width: 80%;
+			}
+			.products-text {	
+				color: #ffffff;
+				font-size: 1.1em;
+				text-align: center;
+				width: 50%;
+			}
+			.progress-container {
+ 				width: 100%;
+  				height: 8px;
+  				background: var(--color-violet);
+			}
+			.progress-bar {
+  				height: 8px;
+  				background: var(--shadow-color);
+  				width: 0%;
+			}
+			.plot {
+				height: 400px;
+				width: 45%;
+				background-color: var(--bg-color);
+				box-shadow: 0 0 25px 0 var(--shadow-color);
+			}
+			li {
+				text-align: left;
+				color: #ffffff;
+				font-size: 1em;
+			}
+			.img {
+				border-radius: 50%;
+				height: 375px;
+				width: 450px;
+				display: block;
+				margin-left: auto;
+				margin-right: auto;
+			}
+			.pic{
+				display: block;
+				width: 400px;
+				height: 200px;
+				margin-left: auto;
+				margin-right: auto;
+				margin-top: 7%;
+			}
+		</style>
+		<script>
+		window.onscroll = function() {myFunction()};
+
+		function myFunction() {
+  			var winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+  			var height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+  			var scrolled = (winScroll / height) * 100;
+  			document.getElementById("myBar").style.width = scrolled + "%";
+		}
+
+		$(document).ready(function() {
+  
+		var scrollLink = $('.scroll');
+		
+		scrollLink.click(function(e) {
+			e.preventDefault();
+			$('body,html').animate({
+			scrollTop: $(this.hash).offset().top
+			}, 1000 );
+		});
+		
+		$(window).scroll(function() {
+			var scrollbarLocation = $(this).scrollTop();
+			
+			scrollLink.each(function() {
+			
+			var sectionOffset = $(this.hash).offset().top - 20;
+			
+			if ( sectionOffset <= scrollbarLocation ) {
+				$(this).parent().addClass('active');
+				$(this).parent().siblings().removeClass('active');
+			}
+			})
+			
+		})
+	
+		})
+		</script>
+	</head>
+	<body id="home">
+		<canvas id="nodes"></canvas>
+		<nav>
+			<a class="nav-element scroll" href="#home">
+				<p>Home</p>
+			</a>
+			<a class="nav-element scroll" href="#about">
+				<p>About</p>
+			</a>
+			<a class="nav-element scroll" href="#products">
+				<p>Products</p>
+			</a>
+			<a class="nav-element scroll" href="#team">
+				<p>Our Team</p>
+			</a>
+			<a class="nav-element scroll" href="#contact">
+				<p>Support</p>
+			</a>
+			<div class="progress-container">
+    				<div class="progress-bar" id="myBar"></div>
+			</div>
+		</nav>
+		<center class="background-img">
+			<div id="top">
+				<div class="vertical-center">
+					<h1 class="header-text">TechXercise</h1>
+					<br>
+					<a class="button square scroll" href="#products">
+						<p>Check out our Products</p>
+					</a>
+				</div>
+			</div>
+		</center>
+		<center id="about" class="center">
+					<div class="row">
+						<div class="column" style="background-color: var(--color-blue);">
+							<br><h2 class="products-header" style="color: var(--shadow-color);">The Problem</h2><br>
+							<ul>
+								<li>Many Americans suffer from obesity, a complex disease involving excessive body fat</li>
+								<br>
+								<li>Obesity can cause various complications such as heart disease, diabetes, high blood pressure, and even certain types of cancer</li>
+								<br>
+								<li>Every state in the U.S has at least 20% or more adults with obesity</li>
+								<br>
+								<li>Below is an interactive map displaying the percentage of adults in each state who are considered obese</li>
+							</ul>
+						</div>
+						<div class="column" style="background-color: var(--shadow-color);">
+							<br><h2 class="products-header" style="color: var(--color-violet);">Solutions</h2><br>
+							<ul>
+								<li>People can modify there diet to incorporate healthier foods consisting of fruits, vegetables, grains, proteins, and dairy</li>
+								<br>
+								<li>At least thirty minutes of exercise can help improve weight problems and create a healthier lifestyle</li>
+								<br>
+								<li>Stretching helps to improve flexibility and avoid injury when doing excercises</li>
+								<br>
+								<li>Combining strength and cardiovascular exercises in additon to a plausible diet can improve people's health, mind, and body</li>
+						</ul>
+						</div>
+						<div class="column" style="background-color: var(--color-lightblue);">
+							<br><h2 class="products-header" style="color: var(--bg-color);">What We Do</h2><br>
+							<ul>
+								<li>Techxercise offers a vairety of services including a bicep curl monitor, squat monitor, and flamingo monitor</li>
+								<br>
+								<li>These services can cultivate proper exercising form and help people maximize their fitness potential</li>
+								<br>
+								<li>We also have a heart attack and body fat prediction service to keep yourself in check from healt problems</li>
+								<br>
+								<li>Techxercise is constantly developing new products to ensure that people can get the fitness help that they need</li>
+						</ul>
+						</div>
+					</div>
+					<p>&nbsp;</p>
+					<iframe src="/static/temp-plot.html" class="plot"></iframe>
+					<div id="products"></div>
+					<p>&nbsp;</p>
+		</center>
+		<center class="center" style="background-color: var(--shadow-color);">
+			<div class="row">
+				<div class="column-2">
+					<img class="pic" src="/static/BicepCurl.jpeg">
+				</div>
+				<div class="column-2">
+                    <br><h2 class="products-header">Bicep Curl Monitor</h2>
+					<p class="products-text">Need to improve your bicep curl form? Bicep Curl Monitor can analyze and provide a rating based on your form. It even has a built in counter for repetitions and sets! Check it out!</p>
+					<a class="button" href="/bicepcurlmonitor.html">
+						<p>Bicep Curl Monitor</p>
+					</a>
+					<p>&nbsp;</p>
+				</div>
+			</div>
+		</center>
+		<center class="center">
+			<div class="row">
+				<div class="column-2">
+					<img class="pic" src="/static/Squats.jpeg">
+				</div>
+				<div class="column-2">
+                    <br><h2 class="products-header">Squats Monitor</h2>
+					<p class="products-text" style="color: var(--shadow-color);">Want to improve your squats? Squats Monitor can analyze and provide a rating based on your form. It even has a built in counter for repetitions! Check it out!</p>
+					<a class="button" href="/squatsmonitor.html">
+						<p>Squats Monitor</p>
+					</a>
+					<p>&nbsp;</p>
+				</div>
+			</div>
+		</center>
+		<center class="center" style="background-color: var(--shadow-color);">
+			<div id="products" class="row">
+				<div class="column-2">
+					<img class="pic" src="/static/Flamingo.jpeg">
+				</div>
+				<div class="column-2">
+                    <br><h2 class="products-header">Flamingo Monitor</h2>
+					<p class="products-text">Having a hard time with your flamingos? Need some assitance? Flaming Monitor can analyze and provide a rating based on your form. It even has a built in counter for repetitions! Check it out!</p>
+					<a class="button" href="/flamingomonitor.html">
+						<p>Flamingo Monitor</p>
+					</a>
+					<p>&nbsp;</p>
+				</div>
+			</div>
+		</center>
+		<center class="center">
+			<div class="row">
+				<div class="column-2">
+					<img class="pic" src="/static/Splits.jpeg">
+				</div>
+				<div class="column-2">
+                    <br><h2 class="products-header">Splits Monitor</h2>
+					<p class="products-text" style="color: var(--shadow-color);">Need help with your splits? The splits mointor can help! It can provide real-time feedback on your how good your splits are! Check it out!</p>
+					<a class="button" href="/splitsmonitor.html">
+						<p>Splits Monitor</p>
+					</a>
+					<p id="team">&nbsp;</p>
+				</div>
+			</div>
+		</center>
+		<center class="center" style="background-color: var(--shadow-color);">
+			<div>
+				<br><h1>Our Team</h1>
+				<img class="img" src="/static/Lakshay.jpeg"></img>
+				<h2>Lakshay Soin</h2>
+				<h3>Founder and CEO</h3>
+				<p class="products-text">Currently building the products and developing the website</p>
+				<a class="button square" href="https://www.linkedin.com/in/lakshay-soin-a08671207/">LinkedIn</a><br><br>
+			</div>
+		</center>
+		<center class="end"><h1 class="products-header">Support</h1>
+		<div id="contact">
+			<div class="row">
+				<div class="column-3" style="margin-top: 25px;">
+					<p style="color: var(--color-blue); text-align: center;">Have a question? Want to give us any suggestions?</p>
+					<a class="button" href="mailto: techxercise@gmail.com" target="_blank">
+						<p>Email us</p>
+					</a>
+				</div>
+				<div class="column-3" style="margin-top: 25px;">
+					<p style="color: var(--color-blue); text-align: center;">Help us improve our products through this survey!</p>
+					<a class="button" href="https://docs.google.com/forms/d/e/1FAIpQLSe6AUPWTUjhk3jT4KcFfykuY5bWD6631TsI2z5beDfzNAyxgw/viewform?usp=sf_link">
+						Techxercise Survey
+					</a>
+				</div>
+			</div>
+			<img src="https://hitwebcounter.com/counter/counter.php?page=7843770&style=0027&nbdigits=6&type=page&initCount=0" title="Free Counter" Alt="web counter" border="0">
+			<p style="color: var(--color-blue); text-align: center;">people have used our products!</p>
+		</div>
+		<p>&nbsp;</p>
+		</center>
+	</body>
+</html>
