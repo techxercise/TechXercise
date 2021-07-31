@@ -1,0 +1,60 @@
+<!doctype HTML>
+<html lang="en">
+	<head>
+		<title>Techxercise - SquatsMonitor</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            .button {
+				padding-left: 50px;
+				padding-right: 50px;
+				padding-top: 15px;
+				padding-bottom: 15px;
+				border-radius: 40px;
+				margin: 5px;
+				border: 3px solid #8860D0;
+				background-color: #5AB9EA;
+				display: inline-block;
+				box-sizing: border-box;
+				cursor: pointer;
+				text-decoration: none;
+				-webkit-user-select: none;
+				-moz-user-select: none;
+				-ms-user-select: none;
+				user-select: none;
+				border-radius: 8px;
+			}
+			.button:hover > p {
+				color: #8860D0;
+			}
+			.row:after {
+ 	 			content: "";
+  				display: table;
+  				clear: both;
+			}
+			.column {
+				float: left;
+				width: 33.3%;
+				min-height: 400px;	
+			}
+			.center {
+				display: flex;
+				justify-content: center;
+				align-items: center;
+			}
+        </style>
+    </head>
+    <body>
+		<h3 style="text-align: center;">Squats Monitor</h3>
+		<div class="row">
+			<div class="column center">
+				<a class="button" href="/squatsmonitorright.html">Right Side</a>
+			</div>
+			<div class="column center">
+				<a class="button" href="/squatsmonitorleft.html">Left Side</a>
+			</div>
+			<div class="column center">
+				<a class="button" href="/index.html">Exit</a>
+			</div>
+		</div>
+    </body>
+</html>
