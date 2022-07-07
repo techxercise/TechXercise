@@ -1,14 +1,23 @@
 <!doctype HTML>
 <html lang="en">
 	<head>
-		<title>Techxercise - SquatsMonitor</title>
+		<title>Techxercise - Squats Monitor</title>
+		<link rel="apple-touch-icon" sizes="180x180" href="/static/Icon.jpeg">
+		<link rel="icon" type="image/jpeg" sizes="32x32" href="/static/Icon.jpeg">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script> 
         <style>
+			html, body {
+				min-width: 100%;
+				min-height: 100%;
+				margin: 0;
+				padding: 0px;
+				overflow-x: hidden;
+				background-color: #8860D0;
+			}
             .button {
-				padding-left: 50px;
-				padding-right: 50px;
-				padding-top: 15px;
-				padding-bottom: 15px;
+				width: 395px;
+				height: 816px;
 				border-radius: 40px;
 				margin: 5px;
 				border: 3px solid #8860D0;
@@ -23,8 +32,8 @@
 				user-select: none;
 				border-radius: 8px;
 			}
-			.button:hover > p {
-				color: #8860D0;
+			.button:hover {
+				background-color: #C1C8E4;
 			}
 			.row:after {
  	 			content: "";
@@ -41,19 +50,80 @@
 				justify-content: center;
 				align-items: center;
 			}
+			.text {
+				font-size: 3em;
+				margin: 0;
+				top: 10%;
+				font-family: 'Nunito-Bold', sans-serif;
+				color: #5AB9EA;
+				text-align: center;
+			}
+			.button-image {
+				display: block;
+				margin-left: auto; 
+				margin-right: auto;
+				padding-top: 120px;
+				width: 200px;
+				height: 500px;
+			}
+			.enlarge { 
+				top:-50px; 
+				left:-35px; 
+				display:block; 
+				z-index:999; 
+				cursor: pointer; 
+				-webkit-transition-property: all; 
+				-webkit-transition-duration: 0.3s; 
+				-webkit-transition-timing-function: ease; 
+			}
+			.enlarge:hover {
+				transform: scale(1.05);
+			}
+			.header {
+				font-family: 'Nunito-Bold', sans-serif; 
+				color: #000000; 
+				text-align: center; 
+				font-size: 2em;
+			}
+			.exit {
+				font-family: 'Nunito-Bold', sans-serif; 
+				color: #ff0000;
+				text-align: center;
+				padding-top: 100%;
+				font-size: 2em;
+			}
+			a:link {
+				text-decoration: none;
+			}
         </style>
     </head>
     <body>
-		<h3 style="text-align: center;">Squats Monitor</h3>
+		<p>&nbsp;</p>
+		<h3 class="text">Squats Monitor</h3>
+		<p>&nbsp;</p>
 		<div class="row">
 			<div class="column center">
-				<a class="button" href="/squatsmonitorright.html">Right Side</a>
+				<a href="/squatsmonitorleft.html/camera=False">
+					<div class="button enlarge">
+						<p class="header">Squats While Facing Right</p>
+							<img class="button-image" src="/static/Squat_Right.png"></img>
+					</div>
+				</a>
 			</div>
 			<div class="column center">
-				<a class="button" href="/squatsmonitorleft.html">Left Side</a>
+				<a href="/squatsmonitorright.html/camera=False">
+					<div class="button enlarge">
+						<p class="header">Squats While Facing Left</p>
+							<img class="button-image" src="/static/Squat_Left.png"></img>
+					</div>
+				</a>
 			</div>
 			<div class="column center">
-				<a class="button" href="/index.html">Exit</a>
+				<a href="/index.html">
+					<div class="button enlarge">
+						<p class="exit">Exit</p>
+					</div>
+				</a>
 			</div>
 		</div>
     </body>

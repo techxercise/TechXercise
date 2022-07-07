@@ -2,8 +2,8 @@
 <html lang="en">
 	<head>
 		<title>Techxercise</title>
-		<link rel="apple-touch-icon" sizes="180x180" href="Icon.png">
-		<link rel="icon" type="image/jpeg" sizes="32x32" href="Icon.png">
+		<link rel="apple-touch-icon" sizes="180x180" href="/static/Icon.jpeg">
+		<link rel="icon" type="image/jpeg" sizes="32x32" href="/static/Icon.jpeg">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>                       
 		<style>
@@ -22,7 +22,7 @@
 				min-width: 100%;
 				min-height: 100%;
 				margin: 0;
-				padding: 0;
+				padding: 0px;
 				overflow-x: hidden;
 			}
 			nav {
@@ -166,11 +166,6 @@
 				height: 90px;
 				z-index: 4;
 			}
-			.home-logo {
-				float: right;
-				height: 80px;
-				width: 80px;
-			}
 			.column {
 				float: left;
 				width: 33.3%;
@@ -260,8 +255,8 @@
 			}
 			.home-logo {
 				float: right;
-				height: 70px;
-				width: 150px;
+				height: 75px;
+				width: 300px;
 			}
 		</style>
 		<script>
@@ -321,7 +316,9 @@
 			<a class="nav-element scroll" href="#contact">
 				<p>Support</p>
 			</a>
-			<a class="home-logo" src="TechXerciseLogo.png"></a>
+			<a class="scroll" href="#home">
+				<img class="home-logo scroll" src="/static/TechXerciseLogo.jpeg"></img>
+			</a>
 			<div class="progress-container">
     				<div class="progress-bar" id="myBar"></div>
 			</div>
@@ -384,7 +381,12 @@
 		<center class="center" style="background-color: var(--shadow-color);">
 			<div class="row">
 				<div class="column-2">
-					<img class="pic" src="/static/BicepCurl.jpeg">
+					<br><h2 class="products-header">Squats Monitor</h2>
+					<p class="products-text">Want to improve your squats? Squats Monitor can analyze and provide a rating based on your form. It even has a built in counter for repetitions! Check it out!</p>
+					<a class="button" href="/squatsmonitor.html">
+						<p>Squats Monitor</p>
+					</a>
+					<p>&nbsp;</p>
 				</div>
 				<div class="column-2">
                     <br><h2 class="products-header">Bicep Curl Monitor</h2>
@@ -396,25 +398,15 @@
 				</div>
 			</div>
 		</center>
-		<center class="center">
-			<div class="row">
-				<div class="column-2">
-					<img class="pic" src="/static/Squats.jpeg">
-				</div>
-				<div class="column-2">
-                    <br><h2 class="products-header">Squats Monitor</h2>
-					<p class="products-text" style="color: var(--shadow-color);">Want to improve your squats? Squats Monitor can analyze and provide a rating based on your form. It even has a built in counter for repetitions! Check it out!</p>
-					<a class="button" href="/squatsmonitor.html">
-						<p>Squats Monitor</p>
-					</a>
-					<p>&nbsp;</p>
-				</div>
-			</div>
-		</center>
 		<center class="center" style="background-color: var(--shadow-color);">
 			<div id="products" class="row">
 				<div class="column-2">
-					<img class="pic" src="/static/Flamingo.jpeg">
+					<br><h2 class="products-header">Splits Monitor</h2>
+					<p class="products-text">Need help with your splits? The splits mointor can help! It can provide real-time feedback on your how good your splits are! Check it out!</p>
+					<a class="button" href="/splitsmonitor.html">
+						<p>Splits Monitor</p>
+					</a>
+					<p id="team">&nbsp;</p>
 				</div>
 				<div class="column-2">
                     <br><h2 class="products-header">Flamingo Monitor</h2>
@@ -426,51 +418,37 @@
 				</div>
 			</div>
 		</center>
-		<center class="center">
-			<div class="row">
-				<div class="column-2">
-					<img class="pic" src="/static/Splits.jpeg">
-				</div>
-				<div class="column-2">
-                    <br><h2 class="products-header">Splits Monitor</h2>
-					<p class="products-text" style="color: var(--shadow-color);">Need help with your splits? The splits mointor can help! It can provide real-time feedback on your how good your splits are! Check it out!</p>
-					<a class="button" href="/splitsmonitor.html">
-						<p>Splits Monitor</p>
-					</a>
-					<p id="team">&nbsp;</p>
-				</div>
-			</div>
-		</center>
-		<center class="center" style="background-color: var(--shadow-color);">
+		<center class="center" style="background-color: #ffffff;">
 			<div>
 				<br><h1>Our Team</h1>
 				<img class="img" src="/static/Lakshay.jpeg"></img>
 				<h2>Lakshay Soin</h2>
 				<h3>Founder and CEO</h3>
-				<p class="products-text">Currently building the products and developing the website</p>
+				<!-- <p class="products-text">Currently building the products and developing the website</p> -->
 				<a class="button square" href="https://www.linkedin.com/in/lakshay-soin-a08671207/">LinkedIn</a><br><br>
 			</div>
 		</center>
-		<center class="end"><h1 class="products-header">Support</h1>
+		<center class="end" style="background-color: var(--shadow-color)">
+		<p>&nbsp;</p>
+		<h1 class="products-header">Support</h1>
 		<div id="contact">
 			<div class="row">
 				<div class="column-3" style="margin-top: 25px;">
-					<p style="color: var(--color-blue); text-align: center;">Have a question? Want to give us any suggestions?</p>
+					<p style="color: #ffffff; text-align: center;">Have a question? Want to give us any suggestions?</p>
 					<a class="button" href="mailto: techxercise@gmail.com" target="_blank">
 						<p>Email us</p>
 					</a>
 				</div>
 				<div class="column-3" style="margin-top: 25px;">
-					<p style="color: var(--color-blue); text-align: center;">Help us improve our products through this survey!</p>
+					<p style="color: #ffffff; text-align: center;">Help us improve our products through this survey!</p>
 					<a class="button" href="https://docs.google.com/forms/d/e/1FAIpQLSe6AUPWTUjhk3jT4KcFfykuY5bWD6631TsI2z5beDfzNAyxgw/viewform?usp=sf_link">
 						Techxercise Survey
 					</a>
 				</div>
 			</div>
-			<img src="https://hitwebcounter.com/counter/counter.php?page=7843770&style=0027&nbdigits=6&type=page&initCount=0" title="Free Counter" Alt="web counter" border="0">
-			<p style="color: var(--color-blue); text-align: center;">people have used our products!</p>
+			<!-- <img src="https://hitwebcounter.com/counter/counter.php?page=7843770&style=0027&nbdigits=6&type=page&initCount=0" title="Free Counter" Alt="web counter" border="0">
+			<p style="color: var(--color-blue); text-align: center;">people have used our products!</p> -->
 		</div>
-		<p>&nbsp;</p>
 		</center>
 	</body>
 </html>

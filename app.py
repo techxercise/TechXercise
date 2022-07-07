@@ -3,7 +3,8 @@
 import cv2
 import numpy as np
 import mediapipe as mp
-from flask import Flask, app, render_template, Response
+from flask import Flask, app, render_template, Response, request
+
 mp_drawing = mp.solutions.drawing_utils # Drawing Utilites
 mp_pose = mp.solutions.pose # Pose
 mp_holistic = mp.solutions.holistic # Holistic
@@ -309,8 +310,8 @@ def bicepCurlRightMonitor(camera=False):
                     image = buffer.tobytes()
                     yield (b'--frame\r\n'
                     b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
-                except:
-                    pass
+                except AttributeError:
+                    print("Attribute Error")
         else:
             return
 
@@ -429,8 +430,8 @@ def bicepCurlLeftMonitor(camera=False):
                     image = buffer.tobytes()
                     yield (b'--frame\r\n'
                     b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
-                except:
-                    pass
+                except AttributeError:
+                    print("Attribute Error")
         else:
             return
 
@@ -555,8 +556,8 @@ def squatsRightMonitor(camera=False):
                     image = buffer.tobytes()
                     yield (b'--frame\r\n'
                     b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
-                except:
-                    pass
+                except AttributeError:
+                    print("Attribute Error")
         else:
             return
 
@@ -681,8 +682,8 @@ def squatsLeftMonitor(camera=False):
                     image = buffer.tobytes()
                     yield (b'--frame\r\n'
                     b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
-                except:
-                    pass
+                except AttributeError:
+                    print("Attribute Error")
         else:
             return
 
@@ -753,8 +754,8 @@ def flamingoRightMonitor(camera=False):
                     image = buffer.tobytes()
                     yield (b'--frame\r\n'
                     b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
-                except:
-                    pass
+                except AttributeError:
+                    print("Attribute Error")
         else:
             return
 
@@ -825,8 +826,8 @@ def flamingoLeftMonitor(camera=False):
                     image = buffer.tobytes()
                     yield (b'--frame\r\n'
                     b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
-                except:
-                    pass
+                except AttributeError:
+                    print("Attribute Error")
         else:
             return
 
@@ -925,10 +926,25 @@ def splitsRightMonitor(camera=False):
                     image = buffer.tobytes()
                     yield (b'--frame\r\n'
                     b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
-                except:
-                    pass
+                except AttributeError:
+                    print("Attribute Error")
         else:
             return
+
+conditions = [False] * 9
+
+@app.route('/')
+def launch():
+    bicepCurlRightMonitor(False)
+    bicepCurlLeftMonitor(False)
+    squatsRightMonitor(False)
+    squatsLeftMonitor(False)
+    flamingoRightMonitor(False)
+    flamingoLeftMonitor(False)
+    splitsRightMonitor(False)
+    #splitsLeftMonitor(False)
+    #frontSplitsMonitor(False)
+    return app.send_static_file('index.html')
 
 @app.route('/index.html')
 def index():
@@ -959,77 +975,131 @@ def launchFlamingoMonitor():
 def launchSplitsMonitor():
     return app.send_static_file('splitsmonitor.html')
 
-@app.route('/bicepcurlmonitorright.html')
-def launchBicepCurlMonitorRight():
+@app.route('/bicepcurlmonitorright.html/camera=False')
+def launchBicepCurlMonitorRightOff():
+    conditions[2] = False
     return render_template('bicepcurlmonitorright.html')
 
-@app.route('/bicepcurlmonitorleft.html')
-def launchBicepCurlMonitorLeft():
+@app.route('/bicepcurlmonitorright.html/camera=True')
+def launchBicepCurlMonitorRightOn():
+    conditions[2] = True
+    return render_template('bicepcurlmonitorright.html')
+
+@app.route('/bicepcurlmonitorleft.html/camera=False')
+def launchBicepCurlMonitorLeftOff():
+    conditions[3] = False
     return render_template('bicepcurlmonitorleft.html')
 
-@app.route('/squatsmonitorright.html')
-def launchSquatsMonitorRight():
+@app.route('/bicepcurlmonitorleft.html/camera=True')
+def launchBicepCurlMonitorLeftOn():
+    conditions[3] = True
+    return render_template('bicepcurlmonitorleft.html')
+
+@app.route('/squatsmonitorright.html/camera=False')
+def launchSquatsMonitorRightOff():
+    conditions[0] = False
     return render_template('squatsmonitorright.html')
 
-@app.route('/squatsmonitorleft.html')
-def launchSquatsMonitorLeft():
+@app.route('/squatsmonitorright.html/camera=True')
+def launchSquatsMonitorRightOn():
+    conditions[0] = True
+    return render_template('squatsmonitorright.html')
+
+@app.route('/squatsmonitorleft.html/camera=False')
+def launchSquatsMonitorLeftOff():
+    conditions[1] = False
     return render_template('squatsmonitorleft.html')
 
-@app.route('/flamingomonitorright.html')
-def launchFlamingoMonitorRight():
+@app.route('/squatsmonitorleft.html/camera=True')
+def launchSquatsMonitorLeftOn():
+    conditions[1] = True
+    return render_template('squatsmonitorleft.html')
+
+@app.route('/flamingomonitorright.html/camera=False')
+def launchFlamingoMonitorRightOff():
+    conditions[7] = False
     return render_template('flamingomonitorright.html')
 
-@app.route('/flamingomonitorleft.html')
-def launchFlamingoMonitorLeft():
+@app.route('/flamingomonitorright.html/camera=True')
+def launchFlamingoMonitorRightOn():
+    conditions[7] = True
+    return render_template('flamingomonitorright.html')
+
+@app.route('/flamingomonitorleft.html/camera=False')
+def launchFlamingoMonitorLeftOff():
+    conditions[8] = False
     return render_template('flamingomonitorleft.html')
 
-@app.route('/frontsplitsmonitor.html')
-def launchFrontSplitsMonitor():
+@app.route('/flamingomonitorleft.html/camera=True')
+def launchFlamingoMonitorLeftOn():
+    conditions[8] = True
+    return render_template('flamingomonitorleft.html')
+
+@app.route('/frontsplitsmonitor.html/camera=False')
+def launchFrontSplitsMonitorOff():
+    conditions[4] = False
     return render_template('frontsplitsmonitor.html')
 
-@app.route('/splitsmonitorright.html')
-def launchSplitsMonitorRight():
+@app.route('/frontsplitsmonitor.html/camera=True')
+def launchFrontSplitsMonitorOn():
+    conditions[4] = True
+    return render_template('frontsplitsmonitor.html')
+
+@app.route('/splitsmonitorright.html/camera=False')
+def launchSplitsMonitorRightOff():
+    conditions[5] = False
+    return render_template('splitsmonitorright.html')
+    
+@app.route('/splitsmonitorright.html/camera=True')
+def launchSplitsMonitorRightOn():
+    conditions[5] = True
     return render_template('splitsmonitorright.html')
 
-@app.route('/splitsmonitorleft.html')
-def launchSplitsMonitorLeft():
+@app.route('/splitsmonitorleft.html/camera=False')
+def launchSplitsMonitorLeftOff():
+    conditions[6] = False
+    return render_template('splitsmonitorleft.html')
+
+@app.route('/splitsmonitorleft.html/camera=True')
+def launchSplitsMonitorLeftOn():
+    conditions[6] = True
     return render_template('splitsmonitorleft.html')
 
 @app.route('/bicepcurlrightvideo')
 def bicepCurlRightVideo():
-    return Response(bicepCurlRightMonitor(True), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(bicepCurlRightMonitor(conditions[2]), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/bicepcurlleftvideo')
 def bicepCurlLeftVideo():
-    return Response(bicepCurlLeftMonitor(True), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(bicepCurlLeftMonitor(conditions[3]), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/squatsrightvideo')
-def squatsRightVideo():
-    return Response(squatsRightMonitor(True), mimetype='multipart/x-mixed-replace; boundary=frame')
+def squatsRightVideo(): 
+    return Response(squatsRightMonitor(conditions[0]), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/squatsleftvideo')
 def squatsLeftVideo():
-    return Response(squatsLeftMonitor(True), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(squatsLeftMonitor(conditions[1]), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/flamingorightvideo')
 def flamingoRightVideo():
-    return Response(flamingoRightMonitor(True), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(flamingoRightMonitor(conditions[7]), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/flamingoleftvideo')
 def flamingoLeftVideo():
-    return Response(flamingoLeftMonitor(True), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(flamingoRightMonitor(conditions[8]), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/frontsplitsvideo')
 def frontSplitsVideo():
-    return Response(frontSplitsMonitor(True), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(frontSplitsMonitor(conditions[4]), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/splitsrightvideo')
 def splitsRightVideo():
-    return Response(splitsRightMonitor(True), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(splitsRightMonitor(conditions[5]), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/splitsleftvideo')
 def splitsLeftVideo():
-    return Response(splitsLeftMonitor(True), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(splitsLeftMonitor(conditions[6]), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
