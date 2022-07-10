@@ -1,0 +1,101 @@
+<!doctype HTML>
+<html lang="en">
+	<head>
+		<title>Techxercise - Splits Monitor Left</title>
+		<link rel="apple-touch-icon" sizes="180x180" href="/static/Icon.jpeg">
+		<link rel="icon" type="image/jpeg" sizes="32x32" href="/static/Icon.jpeg">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script> 
+        <style>
+			.column {
+				float: left;
+				width: 25%;
+				max-height: 400px;	
+			}
+			.row:after {
+ 	 			content: "";
+  				display: table;
+  				clear: both;
+			}
+            .center {
+				display: flex;
+				justify-content: center;
+				align-items: center;
+			}
+            .button {
+				padding-left: 50px;
+				padding-right: 50px;
+				padding-top: 10px;
+				padding-bottom: 10px;
+				border-radius: 40px;
+				margin: 5px;
+				border: 3px solid #8860D0;
+				background-color: #5AB9EA;
+				display: inline-block;
+				box-sizing: border-box;
+				cursor: pointer;
+				text-decoration: none;
+				-webkit-user-select: none;
+				-moz-user-select: none;
+				-ms-user-select: none;
+				user-select: none;
+				border-radius: 8px;
+			}
+            .center {
+				display: flex;
+				justify-content: center;
+				align-items: center;
+			}
+			.button > p {
+				margin: 0;
+				transition: color 0.25s ease-in-out;
+			}
+			.button > p > i {
+				transition: color 0.25s ease-in-out;
+			}
+			.button:hover {
+				background-color: var(--color-lightblue);
+				transform: scale(1.03);
+			}
+			.button:hover > p {
+				color: var(--bg-color);
+			}
+			.button:hover > p > i {
+				color: var(--bg-color);
+			}
+			.button:active {
+				background-color: var(--color-blue);
+				border: 3px solid var(--color-blue);
+				transform: scale(0.98);
+			}
+			:root {
+				--bg-color: #8860D0;
+				--shadow-color: #C1C8E4;
+				--color-blue: #5AB9EA;
+				--color-violet: #5680E9;
+				--color-lightblue: #84CEEB;
+			}
+			* {
+				font-family: 'Nunito', sans-serif;
+				color: var(--bg-color);
+			}
+        </style>
+    </head>
+	<body>
+		<div class="row">
+			<div class="column">
+				<a class="button center" href="/splitsmonitorleft.html/camera=True">Camera on</a>
+			</div>
+			<div class="column">
+				<a class="button center" href="/splitsmonitorleft.html/camera=False">Camera off</a>
+			</div>
+			<div class="column">
+				<a class="button center" href="https://youtu.be/JlrwGRG0I-U">Tutorial</a>
+			</div>
+			<div class="column">
+				<a class="button center" href="/splitsmonitor.html">Exit</a>
+			</div>
+		</div>
+        <img src="{{ url_for('splitsLeftVideo') }}" height="725vh" width="100%">
+    </body>
+</html>

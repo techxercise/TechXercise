@@ -478,7 +478,7 @@ def squatsRightMonitor(camera=False):
                     squat_angle_obj = Angle(ankle,knee,hip)
                     squat_angle = squat_angle_obj.calculate_angle()
                     
-                    back_angle_obj = Angle(ankle,knee,hip)
+                    back_angle_obj = Angle(knee,hip,shoulder)
                     back_angle = back_angle_obj.calculate_angle()
                     
                     squat_obj = Rating(ankle,knee,hip)
@@ -604,7 +604,7 @@ def squatsLeftMonitor(camera=False):
                     squat_angle_obj = Angle(ankle,knee,hip)
                     squat_angle = squat_angle_obj.calculate_angle()
                     
-                    back_angle_obj = Angle(ankle,knee,hip)
+                    back_angle_obj = Angle(knee,hip,shoulder)
                     back_angle = back_angle_obj.calculate_angle()
                     
                     squat_obj = Rating(ankle,knee,hip)
@@ -614,7 +614,7 @@ def squatsLeftMonitor(camera=False):
                     back_percentage = back_obj.calculate_rating_squat_back()
                     
                     # Display Green or Red Message
-                    if squat_percentage >= 80 and back_percentage >= 80:
+                    if squat_percentage >= 80 and back_percentage >= 70:
                         cv2.putText(image, "Perfect!",
                                         tuple(np.multiply(hip, [640, 480]).astype(int)), 
                                         cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 128, 0), 2, cv2.LINE_AA
@@ -629,18 +629,18 @@ def squatsLeftMonitor(camera=False):
                                         tuple(np.multiply(hip, [640, 480]).astype(int)), 
                                         cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
                                             )
-                    elif back_percentage < 80 and back_angle < 68:
+                    elif back_percentage < 70 and back_angle < 68:
                         cv2.putText(image, "Move your back backward",
                                         tuple(np.multiply(hip, [640, 480]).astype(int)), 
                                         cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
                                             )
-                    elif back_percentage < 80 and back_angle > 68:
+                    elif back_percentage < 70 and back_angle > 68:
                         cv2.putText(image, "Move your back forward",
                                         tuple(np.multiply(hip, [640, 480]).astype(int)), 
                                         cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
                                             )
                     
-                    if squat_percentage >= 80 and back_percentage >= 80:
+                    if squat_percentage >= 80 and back_percentage >= 70:
                         stage = 'down'
                     if squat_angle > 90 and stage == 'down':
                         stage = 'up'
@@ -863,10 +863,219 @@ def splitsRightMonitor(camera=False):
                     landmarks = results.pose_landmarks.landmark
                     
                     # Get coordinates
+                    right_ankle = [landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y]
                     right_hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
                     left_hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
                     right_knee = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
                     left_knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+                    left_shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
+
+                    # Calculate percentage
+                    obj_right_1 = Rating(right_knee,right_hip,left_hip)
+                    right_percentage_1 = obj_right_1.calculate_rating_splits()
+
+                    obj_right_2 = Rating(right_ankle,right_knee,right_hip)
+                    right_percentage_2 = obj_right_2.calculate_rating_splits()
+                    
+                    obj_left_1 = Rating(left_knee,left_hip,right_hip)
+                    left_percentage_1 = obj_left_1.calculate_rating_splits()
+                    
+                    percentage = (right_percentage_1 + right_percentage_2 + left_percentage_1)/3
+                    
+                    obj = Rating(right_knee,right_hip,left_shoulder)
+                    back_angle = obj.calculate_angle()
+                    back_percentage = obj.calculate_rating_splits_back()
+                    
+                    # Display Green or Red Message
+                    if percentage >= 85 and back_percentage >= 80:
+                        cv2.putText(image, "Perfect!", 
+                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 128, 0), 2, cv2.LINE_AA
+                                        )
+                    elif back_percentage < 80 and back_angle > 90:
+                        cv2.putText(image, "Move your back forward", 
+                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                                    )
+                    elif back_percentage < 80 and back_angle < 90:
+                        cv2.putText(image, "Move your back backward", 
+                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                                    )
+                    else:
+                        cv2.putText(image, "Lower your legs", 
+                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                                        )
+                            
+                    # Rectangle Setup on Top
+                    cv2.rectangle(image, (0,0), (10000,80), (245,117,16), -1)
+                    
+                    # Display Leg Accuarcy
+                    cv2.putText(image, 'Split Accuarcy', (300,12), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
+                    cv2.putText(image, str(round(percentage, 2)) + '%', 
+                                (300,60), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
+                            
+                    # Display Back Accuarcy
+                    cv2.putText(image, 'Back Accuarcy', (800,12), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
+                    cv2.putText(image, str(round(back_percentage, 2)) + '%', 
+                                (800,60), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
+
+                    # Show to screen
+                    ret, buffer = cv2.imencode('.jpg', image)
+                    image = buffer.tobytes()
+                    yield (b'--frame\r\n'
+                    b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
+                except AttributeError:
+                    print("Attribute Error")
+        else:
+            return
+
+def splitsLeftMonitor(camera=False):
+    # Splits Right
+
+    # Access mediapipe model
+    with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
+    # Set mediapipe model
+        if camera == True:
+            cap = cv2.VideoCapture(0)
+            while cap.isOpened():
+
+                # Read feed
+                ret, frame = cap.read()
+
+                # Recolor image to RGB
+                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                image.flags.writeable = False
+                
+                # Make Detections
+                results = pose.process(image)
+                
+                # Recolor back to BGR
+                image.flags.writeable = True
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                
+                # Draw landmarks
+                draw_styled_landmarks_side_splits_right(image, results)
+                
+                # Extract landmarks
+                try:
+                    landmarks = results.pose_landmarks.landmark
+                    
+                    # Get coordinates
+                    left_ankle = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
+                    right_hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
+                    left_hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
+                    right_knee = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
+                    left_knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+                    right_shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
+
+                    # Calculate percentage
+                    obj_right = Rating(right_knee,right_hip,left_hip)
+                    right_percentage = obj_right.calculate_rating_splits()
+                    
+                    obj_left_1 = Rating(left_knee,left_hip,right_hip)
+                    left_percentage_1 = obj_left_1.calculate_rating_splits()
+
+                    obj_left_2 = Rating(left_ankle, left_knee, left_hip)
+                    left_percentage_2 = obj_left_2.calculate_rating_splits()
+                    
+                    percentage = (right_percentage + left_percentage_1 + left_percentage_2)/3
+                    
+                    obj = Rating(left_knee,left_hip,right_shoulder)
+                    back_angle = obj.calculate_angle()
+                    back_percentage = obj.calculate_rating_splits_back()
+                    
+                    # Display Green or Red Message
+                    if percentage >= 85 and back_percentage >= 80:
+                        cv2.putText(image, "Perfect!", 
+                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 128, 0), 2, cv2.LINE_AA
+                                        )
+                    elif back_percentage < 80 and back_angle > 90:
+                        cv2.putText(image, "Move your back forward", 
+                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                                    )
+                    elif back_percentage < 80 and back_angle < 90:
+                        cv2.putText(image, "Move your back backward", 
+                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                                    )
+                    else:
+                        cv2.putText(image, "Lower your legs", 
+                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                                        )
+                            
+                    # Rectangle Setup on Top
+                    cv2.rectangle(image, (0,0), (10000,80), (245,117,16), -1)
+                    
+                    # Display Leg Accuarcy
+                    cv2.putText(image, 'Split Accuarcy', (300,12), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
+                    cv2.putText(image, str(round(percentage, 2)) + '%', 
+                                (300,60), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
+                            
+                    # Display Back Accuarcy
+                    cv2.putText(image, 'Back Accuarcy', (800,12), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
+                    cv2.putText(image, str(round(back_percentage, 2)) + '%', 
+                                (800,60), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
+
+                    # Show to screen
+                    ret, buffer = cv2.imencode('.jpg', image)
+                    image = buffer.tobytes()
+                    yield (b'--frame\r\n'
+                    b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
+                except AttributeError:
+                    print("Attribute Error")
+        else:
+            return
+
+def frontSplitsMonitor(camera=False):
+    # Splits Right
+
+    # Access mediapipe model
+    with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
+    # Set mediapipe model
+        if camera == True:
+            cap = cv2.VideoCapture(0)
+            while cap.isOpened():
+
+                # Read feed
+                ret, frame = cap.read()
+
+                # Recolor image to RGB
+                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                image.flags.writeable = False
+                
+                # Make Detections
+                results = pose.process(image)
+                
+                # Recolor back to BGR
+                image.flags.writeable = True
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                
+                # Draw landmarks
+                draw_styled_landmarks_side_splits_right(image, results)
+                
+                # Extract landmarks
+                try:
+                    landmarks = results.pose_landmarks.landmark
+                    
+                    # Get coordinates
+                    right_hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
+                    left_hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
+                    right_knee = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
+                    left_knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+                    left_shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
                     right_shoulder = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
 
                     # Calculate percentage
@@ -878,9 +1087,12 @@ def splitsRightMonitor(camera=False):
                     
                     percentage = (right_percentage + left_percentage)/2
                     
-                    obj = Rating(right_knee,right_hip,right_shoulder)
-                    back_angle = obj.calculate_angle()
-                    back_percentage = obj.calculate_rating_splits_back()
+                    obj_right = Rating(right_knee,right_hip,right_shoulder)
+                    obj_left = Rating(left_knee,left_hip,left_shoulder)
+                    back_right_angle = obj_right.calculate_angle()
+                    back_left_angle = obj_left.calculate_angle()
+                    back_angle = (back_right_angle + back_left_angle) / 2
+                    back_percentage = (obj_right.calculate_rating_splits_back() + obj_left.calculate_rating_splits_back())/2
                     
                     # Display Green or Red Message
                     if percentage >= 80 and back_percentage >= 80:
@@ -942,8 +1154,8 @@ def launch():
     flamingoRightMonitor(False)
     flamingoLeftMonitor(False)
     splitsRightMonitor(False)
-    #splitsLeftMonitor(False)
-    #frontSplitsMonitor(False)
+    splitsLeftMonitor(False)
+    frontSplitsMonitor(False)
     return app.send_static_file('index.html')
 
 @app.route('/index.html')
@@ -955,8 +1167,8 @@ def index():
     flamingoRightMonitor(False)
     flamingoLeftMonitor(False)
     splitsRightMonitor(False)
-    #splitsLeftMonitor(False)
-    #frontSplitsMonitor(False)
+    splitsLeftMonitor(False)
+    frontSplitsMonitor(False)
     return app.send_static_file('index.html')
 
 @app.route('/bicepcurlmonitor.html')
@@ -1087,7 +1299,7 @@ def flamingoRightVideo():
 
 @app.route('/flamingoleftvideo')
 def flamingoLeftVideo():
-    return Response(flamingoRightMonitor(conditions[8]), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(flamingoLeftMonitor(conditions[8]), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/frontsplitsvideo')
 def frontSplitsVideo():
