@@ -1,9 +1,9 @@
 # Importing libraries
-# testing
-import cv2
-import numpy as np
-import mediapipe as mp
+from cv2 import CAP_PROP_IMAGES_LAST
 from flask import Flask, app, render_template, Response, request
+import numpy as np
+import cv2
+import mediapipe as mp
 
 mp_drawing = mp.solutions.drawing_utils # Drawing Utilites
 mp_pose = mp.solutions.pose # Pose
@@ -437,7 +437,6 @@ def bicepCurlLeftMonitor(camera=False):
 
 def squatsRightMonitor(camera=False):
     # Squats Right
-
     # Access mediapipe model
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
     # Set mediapipe model 
@@ -446,7 +445,6 @@ def squatsRightMonitor(camera=False):
             cnt = 0
             stage = None
             while cap.isOpened():
-
                 # Read feed
                 ret, frame = cap.read()
 
@@ -556,6 +554,7 @@ def squatsRightMonitor(camera=False):
                     image = buffer.tobytes()
                     yield (b'--frame\r\n'
                     b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
+
                 except AttributeError:
                     print("Attribute Error")
         else:
@@ -1314,4 +1313,4 @@ def splitsLeftVideo():
     return Response(splitsLeftMonitor(conditions[6]), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='127.0.0.1', port=8080, debug=True)

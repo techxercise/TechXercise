@@ -1,15 +1,21 @@
 # syntax=docker/dockerfile:1
 
-FROM python:3.8-slim-buster
+FROM python:3.9-slim-buster
 
-WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libopencv-dev \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 COPY requirements.txt requirements.txt
 RUN pip3 install -r requirements.txt
-RUN apt-get update
-RUN apt-get install ffmpeg libsm6 libxext6  -y
-RUN pip3 install opencv-python
+
+WORKDIR /app
 
 COPY . .
 
-CMD [ "python3", "-m" , "flask", "run", "--host=0.0.0.0"]
+EXPOSE 8080
+CMD ["gunicorn", "app:app", "-b", ":8080", "--timeout", "300"]
