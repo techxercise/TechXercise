@@ -1,14 +1,150 @@
 # Importing libraries
-from cv2 import CAP_PROP_IMAGES_LAST
-from flask import Flask, app, render_template, Response, request
+
 import numpy as np
 import cv2
 import mediapipe as mp
 
+import argparse
+import asyncio
+import json
+import logging
+import os
+import ssl
+import uuid
+
+import cv2
+from aiohttp import web
+from av import VideoFrame
+
+from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
+from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder, MediaRelay
+
+app = web.Application() # Initialization
+routes = web.RouteTableDef()
 mp_drawing = mp.solutions.drawing_utils # Drawing Utilites
 mp_pose = mp.solutions.pose # Pose
 mp_holistic = mp.solutions.holistic # Holistic
-app = Flask(__name__) # Initialization
+
+ROOT = os.path.dirname(__file__)
+
+logger = logging.getLogger("pc")
+pcs = set()
+relay = MediaRelay()
+
+class VideoTransformTrack(MediaStreamTrack):
+    """
+    A video stream track that transforms frames from an another track.
+    """
+
+    kind = "video"
+
+    def __init__(self, track, transform):
+        super().__init__()  # don't forget this!
+        self.track = track
+
+    async def recv(self):
+        frame = await self.track.recv()
+        if play[0]:
+            frame = squatsRightMonitor(frame)
+        elif play[1]:
+            frame = squatsLeftMonitor(frame)
+        elif play[2]:
+            frame = bicepCurlRightMonitor(frame)
+        elif play[3]:
+            frame = bicepCurlLeftMonitor(frame)
+        elif play[4]:
+            frame = flamingoRightMonitor(frame)
+        elif play[5]:
+            frame = flamingoLeftMonitor(frame)
+        elif play[6]:
+            frame = frontSplitsMonitor(frame)
+        elif play[7]:
+            frame = splitsRightMonitor(frame)
+        elif play[8]:
+            frame = splitsLeftMonitor(frame)
+        return frame
+
+async def index(request):
+    content = open(os.path.join(ROOT, "index.html"), "r").read()
+    return web.Response(content_type="text/html", text=content)
+
+
+async def javascript(request):
+    content = open(os.path.join(ROOT, "client.js"), "r").read()
+    return web.Response(content_type="application/javascript", text=content)
+
+
+async def offer(request):
+    params = await request.json()
+    offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
+
+    pc = RTCPeerConnection()
+    pc_id = "PeerConnection(%s)" % uuid.uuid4()
+    pcs.add(pc)
+
+    def log_info(msg, *args):
+        logger.info(pc_id + " " + msg, *args)
+
+    log_info("Created for %s", request.remote)
+
+    # prepare local media
+    if args.record_to:
+        recorder = MediaRecorder(args.record_to)
+    else:
+        recorder = MediaBlackhole()
+
+    @pc.on("datachannel")
+    def on_datachannel(channel):
+        @channel.on("message")
+        def on_message(message):
+            if isinstance(message, str) and message.startswith("ping"):
+                channel.send("pong" + message[4:])
+
+    @pc.on("connectionstatechange")
+    async def on_connectionstatechange():
+        log_info("Connection state is %s", pc.connectionState)
+        if pc.connectionState == "failed":
+            await pc.close()
+            pcs.discard(pc)
+
+    @pc.on("track")
+    def on_track(track):
+        log_info("Track %s received", track.kind)
+
+        if track.kind == "video":
+            pc.addTrack(
+                VideoTransformTrack(
+                    relay.subscribe(track), transform=params["video_transform"]
+                )
+            )
+            if args.record_to:
+                recorder.addTrack(relay.subscribe(track))
+
+        @track.on("ended")
+        async def on_ended():
+            log_info("Track %s ended", track.kind)
+            await recorder.stop()
+
+    # handle offer
+    await pc.setRemoteDescription(offer)
+    await recorder.start()
+
+    # send answer
+    answer = await pc.createAnswer()
+    await pc.setLocalDescription(answer)
+
+    return web.Response(
+        content_type="application/json",
+        text=json.dumps(
+            {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
+        ),
+    )
+
+async def on_shutdown(app):
+    # close peer connections
+    coros = [pc.close() for pc in pcs]
+    await asyncio.gather(*coros)
+    pcs.clear()
 
 def mediapipe_detection(image, model):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) # COLOR CONVERSION BGR 2 RGB
@@ -196,1121 +332,1069 @@ class Rating(Angle):
             
         return message
 
-def bicepCurlRightMonitor(camera=False):
+def bicepCurlRightMonitor(frame):
     # Right Arm
 
     # Access mediapipe model
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
-        if camera == True:
-            cap = cv2.VideoCapture(0)
-            cnt = 0
-            cnt_copy = 0
-            curl_stage = None
-            set_cnt = 0
-            exit = 0
-            # Set mediapipe model 
-            while cap.isOpened():
+            
+        cnt = 0
+        cnt_copy = 0
+        curl_stage = None
+        set_cnt = 0
 
-                # Read feed
-                ret, frame = cap.read()
+        # Set mediapipe model 
 
-                if ret:
-                    if exit:
-                        cap.release()
-                        cv2.destroyAllWindows()
+        image = frame.to_ndarray(format="bgr24")
 
-                # Recolor image to RGB
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                image.flags.writeable = False
+        # Recolor image to RGB
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image.flags.writeable = False
+        
+        # Make Detections
+        results = pose.process(image)
+        
+        # Recolor back to BGR
+        image.flags.writeable = True
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        
+        # Draw landmarks
+        draw_styled_landmarks_bicep_curl_right(image, results)
+
+        try:
+            # Extract landmarks
+            landmarks = results.pose_landmarks.landmark
+
+            # Get coordinates
+            hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
+            shoulder = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
+            elbow = [landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].y]
+            wrist = [landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].y]
+
+        except Exception as e:
+            print(e)
+        
+        try:
+            
+            # Instantiate objects            
+            rating = Rating(hip,shoulder,elbow)
+            message = rating.message_right()
+            percentage = rating.calculate_rating_bicep_curl()
+            
+            # Display Green or Red Message
+            if percentage >= 80:
+                cv2.putText(image, message,
+                                tuple(np.multiply(elbow, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 128, 0), 2, cv2.LINE_AA
+                                    )
+            else:
+                cv2.putText(image, message,
+                                tuple(np.multiply(elbow, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
+                                    )
                 
-                # Make Detections
-                results = pose.process(image)
+            angle = Angle(shoulder,elbow,wrist)
+            angle = angle.calculate_angle()
+            
+            if angle > 150 and percentage > 80:
+                curl_stage = 'down'
+            if angle < 40 and curl_stage == 'down':
+                curl_stage = 'up'
+                cnt += 1
+                cnt_copy += 1
                 
-                # Recolor back to BGR
-                image.flags.writeable = True
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            if cnt_copy == 10:
+                set_cnt += 1
+                cnt_copy = 0
                 
-                # Draw landmarks
-                draw_styled_landmarks_bicep_curl_right(image, results)
-                
-                try:
-                    # Extract landmarks
-                    landmarks = results.pose_landmarks.landmark
+            # Rectangle Setup on Top
+            cv2.rectangle(image, (0,0), (1000,80), (245,117,16), -1)
+            
+            # Display Accuarcy
+            cv2.putText(image, 'Accuarcy', (25,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(round(percentage, 2)) + '%', 
+                        (25,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
+            
+            # Curl Stage data
+            cv2.putText(image, 'Curl Stage', (175,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, curl_stage, 
+                        (175,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
+            
+            # Display Set
+            cv2.putText(image, 'Set', (325,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(set_cnt), 
+                        (325,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
+            
+            # Display Repetitions
+            cv2.putText(image, 'Repetitions', (475,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(cnt), 
+                        (475,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
+            
+        except AttributeError as e:
+            print(e)
 
-                    # Get coordinates
-                    hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
-                    shoulder = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
-                    elbow = [landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].y]
-                    wrist = [landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].y]
-                    
-                    # Instantiate objects            
-                    rating = Rating(hip,shoulder,elbow)
-                    message = rating.message_right()
-                    percentage = rating.calculate_rating_bicep_curl()
-                    
-                    # Display Green or Red Message
-                    if percentage >= 80:
-                        cv2.putText(image, message,
-                                        tuple(np.multiply(elbow, [640, 480]).astype(int)), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 128, 0), 2, cv2.LINE_AA
-                                            )
-                    else:
-                        cv2.putText(image, message,
-                                        tuple(np.multiply(elbow, [640, 480]).astype(int)), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
-                                            )
-                        
-                    angle = Angle(shoulder,elbow,wrist)
-                    angle = angle.calculate_angle()
-                    
-                    if angle > 150 and percentage > 80:
-                        curl_stage = 'down'
-                    if angle < 40 and curl_stage == 'down':
-                        curl_stage = 'up'
-                        cnt += 1
-                        cnt_copy += 1
-                        
-                    if cnt_copy == 10:
-                        set_cnt += 1
-                        cnt_copy = 0
-                        
-                    # Rectangle Setup on Top
-                    cv2.rectangle(image, (0,0), (10000,80), (245,117,16), -1)
-                    
-                    # Display Accuarcy
-                    cv2.putText(image, 'Accuarcy', (150,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(round(percentage, 2)) + '%', 
-                                (150,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
-                    
-                    # Curl Stage data
-                    cv2.putText(image, 'Curl Stage', (450,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, curl_stage, 
-                                (450,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255,255,255), 2, cv2.LINE_AA)
-                    
-                    # Display Set
-                    cv2.putText(image, 'Set', (750,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(set_cnt), 
-                                (750,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255,255,255), 2, cv2.LINE_AA)
-                    
-                    # Display Repetitions
-                    cv2.putText(image, 'Repetitions', (1050,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(cnt), 
-                                (1050,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255,255,255), 2, cv2.LINE_AA)
-                    
-                    # Show to screen
-                    ret, buffer = cv2.imencode('.jpg', image)
-                    image = buffer.tobytes()
-                    yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
-                except AttributeError:
-                    print("Attribute Error")
-        else:
-            return
+        new_frame = VideoFrame.from_ndarray(image, format="bgr24")
+        new_frame.pts = frame.pts
+        new_frame.time_base = frame.time_base
+        return new_frame
 
 
-def bicepCurlLeftMonitor(camera=False):
+def bicepCurlLeftMonitor(frame):
     # Left Arm
 
     # Access mediapipe model
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
-        if camera == True:
-            cap = cv2.VideoCapture(0)
-            cnt = 0
-            cnt_copy = 0
-            curl_stage = None
-            set_cnt = 0
-            exit = 0
-            # Set mediapipe model 
-            while cap.isOpened():
 
-                # Read feed
-                ret, frame = cap.read()
+        cnt = 0
+        cnt_copy = 0
+        curl_stage = None
+        set_cnt = 0
 
-                if ret:
-                    if exit:
-                        cap.release()
-                        cv2.destroyAllWindows()
+        image = frame.to_ndarray(format="bgr24")
 
-                # Recolor image to RGB
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                image.flags.writeable = False
+        # Recolor image to RGB
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image.flags.writeable = False
+        
+        # Make Detections
+        results = pose.process(image)
+        
+        # Recolor back to BGR
+        image.flags.writeable = True
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        
+        # Draw landmarks
+        draw_styled_landmarks_bicep_curl_left(image, results)
+
+        try:
+
+            # Extract landmarks
+            landmarks = results.pose_landmarks.landmark
+
+            # Get coordinates
+            hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
+            shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
+            elbow = [landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].x,landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
+            wrist = [landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].x,landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y]
+
+        except Exception as e:
+            print(e)
+        
+        try:
+            
+            # Instantiate objects            
+            rating = Rating(hip,shoulder,elbow)
+            message = rating.message_left()
+            percentage = rating.calculate_rating_bicep_curl()
+            
+            # Display Green or Red Message
+            if percentage >= 80:
+                cv2.putText(image, message,
+                                tuple(np.multiply(elbow, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 128, 0), 2, cv2.LINE_AA
+                                    )
+            else:
+                cv2.putText(image, message,
+                                tuple(np.multiply(elbow, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
+                                    )
                 
-                # Make Detections
-                results = pose.process(image)
+            angle = Angle(shoulder,elbow,wrist)
+            angle = angle.calculate_angle()
+            
+            if angle > 150 and percentage > 80:
+                curl_stage = 'down'
+            if angle < 40 and curl_stage == 'down':
+                curl_stage = 'up'
+                cnt += 1
+                cnt_copy += 1
                 
-                # Recolor back to BGR
-                image.flags.writeable = True
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            if cnt_copy == 10:
+                set_cnt += 1
+                cnt_copy = 0
                 
-                # Draw landmarks
-                draw_styled_landmarks_bicep_curl_left(image, results)
-                
-                try:
-                    # Extract landmarks
-                    landmarks = results.pose_landmarks.landmark
+            # Rectangle Setup on Top
+            cv2.rectangle(image, (0,0), (1000,80), (245,117,16), -1)
+            
+            # Display Accuarcy
+            cv2.putText(image, 'Accuarcy', (25,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(round(percentage, 2)) + '%', 
+                        (25,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
+            
+            # Curl Stage data
+            cv2.putText(image, 'Curl Stage', (175,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, curl_stage, 
+                        (175,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
+            
+            # Display Set
+            cv2.putText(image, 'Set', (325,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(set_cnt), 
+                        (325,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
+            
+            # Display Repetitions
+            cv2.putText(image, 'Repetitions', (475,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(cnt), 
+                        (475,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
+            
+        except AttributeError as e:
+            print(e)
+        new_frame = VideoFrame.from_ndarray(image, format="bgr24")
+        new_frame.pts = frame.pts
+        new_frame.time_base = frame.time_base
+        return new_frame
 
-                    # Get coordinates
-                    hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
-                    shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
-                    elbow = [landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].x,landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
-                    wrist = [landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].x,landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y]
-                    
-                    # Instantiate objects            
-                    rating = Rating(hip,shoulder,elbow)
-                    message = rating.message_left()
-                    percentage = rating.calculate_rating_bicep_curl()
-                    
-                    # Display Green or Red Message
-                    if percentage >= 80:
-                        cv2.putText(image, message,
-                                        tuple(np.multiply(elbow, [640, 480]).astype(int)), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 128, 0), 2, cv2.LINE_AA
-                                            )
-                    else:
-                        cv2.putText(image, message,
-                                        tuple(np.multiply(elbow, [640, 480]).astype(int)), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
-                                            )
-                        
-                    angle = Angle(shoulder,elbow,wrist)
-                    angle = angle.calculate_angle()
-                    
-                    if angle > 150 and percentage > 80:
-                        curl_stage = 'down'
-                    if angle < 40 and curl_stage == 'down':
-                        curl_stage = 'up'
-                        cnt += 1
-                        cnt_copy += 1
-                        
-                    if cnt_copy == 10:
-                        set_cnt += 1
-                        cnt_copy = 0
-                        
-                    # Rectangle Setup on Top
-                    cv2.rectangle(image, (0,0), (10000,80), (245,117,16), -1)
-                    
-                    # Display Accuarcy
-                    cv2.putText(image, 'Accuarcy', (150,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(round(percentage, 2)) + '%', 
-                                (150,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
-                    
-                    # Curl Stage data
-                    cv2.putText(image, 'Curl Stage', (450,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, curl_stage, 
-                                (450,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255,255,255), 2, cv2.LINE_AA)
-                    
-                    # Display Set
-                    cv2.putText(image, 'Set', (750,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(set_cnt), 
-                                (750,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255,255,255), 2, cv2.LINE_AA)
-                    
-                    # Display Repetitions
-                    cv2.putText(image, 'Repetitions', (1050,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(cnt), 
-                                (1050,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255,255,255), 2, cv2.LINE_AA)
-                    
-                    # Show to screen
-                    ret, buffer = cv2.imencode('.jpg', image)
-                    image = buffer.tobytes()
-                    yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
-                except AttributeError:
-                    print("Attribute Error")
-        else:
-            return
-
-def squatsRightMonitor(camera=False):
+def squatsRightMonitor(frame):
     # Squats Right
     # Access mediapipe model
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
     # Set mediapipe model 
-        if camera == True:
-            cap = cv2.VideoCapture(0)
-            cnt = 0
-            stage = None
-            while cap.isOpened():
-                # Read feed
-                ret, frame = cap.read()
+        cnt = 0
+        stage = None
 
-                # Recolor image to RGB
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                image.flags.writeable = False
-                
-                # Make Detections
-                results = pose.process(image)
-                
-                # Recolor back to BGR
-                image.flags.writeable = True
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                
-                # Draw landmarks
-                draw_styled_landmarks_squat_right(image, results)
-                
-                # Extract landmarks
-                try:
-                    landmarks = results.pose_landmarks.landmark
-                    
-                    # Get coordinates
-                    hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
-                    knee = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
-                    ankle = [landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y]
-                    shoulder = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
-                    
-                    # Instantiate objects
-                    squat_angle_obj = Angle(ankle,knee,hip)
-                    squat_angle = squat_angle_obj.calculate_angle()
-                    
-                    back_angle_obj = Angle(knee,hip,shoulder)
-                    back_angle = back_angle_obj.calculate_angle()
-                    
-                    squat_obj = Rating(ankle,knee,hip)
-                    squat_percentage = squat_obj.calculate_rating_squat()
-                    
-                    back_obj = Rating(knee,hip,shoulder)
-                    back_percentage = back_obj.calculate_rating_squat_back()
-                    
-                    # Display Green or Red Message
-                    if squat_percentage >= 80 and back_percentage >= 80:
-                        cv2.putText(image, "Perfect!",
-                                        tuple(np.multiply(hip, [640, 480]).astype(int)), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 128, 0), 2, cv2.LINE_AA
-                                        )
-                    elif squat_percentage < 80 and squat_angle > 77:
-                        cv2.putText(image, "Lower your hip",
-                                        tuple(np.multiply(hip, [640, 480]).astype(int)), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
-                                            )
-                    elif squat_percentage < 80 and squat_angle < 77:
-                        cv2.putText(image, "Raise your hip",
-                                        tuple(np.multiply(hip, [640, 480]).astype(int)), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
-                                            )
-                    elif back_percentage < 80 and back_angle < 68:
-                        cv2.putText(image, "Move your back backward",
-                                        tuple(np.multiply(hip, [640, 480]).astype(int)), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
-                                            )
-                    elif back_percentage < 80 and back_angle > 68:
-                        cv2.putText(image, "Move your back forward",
-                                        tuple(np.multiply(hip, [640, 480]).astype(int)), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
-                                            )
-                    
-                    if squat_percentage > 80 and back_percentage > 80:
-                        stage = 'down'
-                    if squat_angle > 90 and stage == 'down':
-                        stage = 'up'
-                        cnt += 1
-                
-                    # Rectangle Setup on Top
-                    cv2.rectangle(image, (0,0), (10000,80), (245,117,16), -1)
-                    
-                    # Display Leg Accuarcy
-                    cv2.putText(image, 'Leg Accuarcy', (150,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(round(squat_percentage, 2)) + '%', 
-                                (150,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
-                    
-                    # Display Back Accuarcy
-                    cv2.putText(image, 'Back Accuarcy', (450,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(round(back_percentage, 2)) + '%', 
-                                (450,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
-                    
-                    # Curl Stage data
-                    cv2.putText(image, 'Squat Stage', (750,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, stage, 
-                                (750,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255,255,255), 2, cv2.LINE_AA)
-                    
-                    # Display Repetitions
-                    cv2.putText(image, 'Repetitions', (1050,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(cnt), 
-                                (1050,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255,255,255), 2, cv2.LINE_AA)
-                    
-                    # Show to screen
-                    ret, buffer = cv2.imencode('.jpg', image)
-                    image = buffer.tobytes()
-                    yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
+        # Recolor image to RGB
+        image = frame.to_ndarray(format="bgr24")
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image.flags.writeable = False
+        
+        # Make Detections
+        results = pose.process(image)
+        
+        # Recolor back to BGR
+        image.flags.writeable = True
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        
+        # Draw landmarks
+        draw_styled_landmarks_squat_right(image, results)
+        
+        try:
 
-                except AttributeError:
-                    print("Attribute Error")
-        else:
-            return
+            landmarks = results.pose_landmarks.landmark
+                    
+            # Get coordinates
+            hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
+            knee = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
+            ankle = [landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y]
+            shoulder = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
 
-def squatsLeftMonitor(camera=False):
+        except Exception as e:
+            print(e)
+
+        # Extract landmarks
+        try:
+            # Instantiate objects
+            squat_angle_obj = Angle(ankle,knee,hip)
+            squat_angle = squat_angle_obj.calculate_angle()
+            
+            back_angle_obj = Angle(knee,hip,shoulder)
+            back_angle = back_angle_obj.calculate_angle()
+            
+            squat_obj = Rating(ankle,knee,hip)
+            squat_percentage = squat_obj.calculate_rating_squat()
+            
+            back_obj = Rating(knee,hip,shoulder)
+            back_percentage = back_obj.calculate_rating_squat_back()
+            
+            # Display Green or Red Message
+            if squat_percentage >= 80 and back_percentage >= 80:
+                cv2.putText(image, "Perfect!",
+                                tuple(np.multiply(hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 128, 0), 2, cv2.LINE_AA
+                                )
+            elif squat_percentage < 80 and squat_angle > 77:
+                cv2.putText(image, "Lower your hip",
+                                tuple(np.multiply(hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
+                                    )
+            elif squat_percentage < 80 and squat_angle < 77:
+                cv2.putText(image, "Raise your hip",
+                                tuple(np.multiply(hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
+                                    )
+            elif back_percentage < 80 and back_angle < 68:
+                cv2.putText(image, "Move your back backward",
+                                tuple(np.multiply(hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
+                                    )
+            elif back_percentage < 80 and back_angle > 68:
+                cv2.putText(image, "Move your back forward",
+                                tuple(np.multiply(hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
+                                    )
+            
+            if squat_percentage > 80 and back_percentage > 80:
+                stage = 'down'
+            if squat_angle > 90 and stage == 'down':
+                stage = 'up'
+                cnt += 1
+        
+            # Rectangle Setup on Top
+            cv2.rectangle(image, (0,0), (1000,80), (245,117,16), -1)
+            
+            # Display Leg Accuarcy
+            cv2.putText(image, 'Leg Accuarcy', (25,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(round(squat_percentage, 2)) + '%', 
+                        (25,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
+            
+            # Display Back Accuarcy
+            cv2.putText(image, 'Back Accuarcy', (175,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(round(back_percentage, 2)) + '%', 
+                        (175,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
+            
+            # Curl Stage data
+            cv2.putText(image, 'Squat Stage', (325,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, stage, 
+                        (325,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
+            
+            # Display Repetitions
+            cv2.putText(image, 'Repetitions', (475,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(cnt), 
+                        (475,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
+        except AttributeError as e:
+            print(e)
+        new_frame = VideoFrame.from_ndarray(image, format="bgr24")
+        new_frame.pts = frame.pts
+        new_frame.time_base = frame.time_base
+        return new_frame
+
+def squatsLeftMonitor(frame):
     # Squats Left
 
     # Access mediapipe model
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
     # Set mediapipe model 
-        if camera == True:
-            cap = cv2.VideoCapture(0)
-            cnt = 0
-            stage = None
-            while cap.isOpened():
 
-                # Read feed
-                ret, frame = cap.read()
+        cnt = 0
+        stage = None
 
-                # Recolor image to RGB
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                image.flags.writeable = False
-                
-                # Make Detections
-                results = pose.process(image)
-                
-                # Recolor back to BGR
-                image.flags.writeable = True
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                
-                # Draw landmarks
-                draw_styled_landmarks_squat_left(image, results)
-                
-                # Extract landmarks
-                try:
-                    landmarks = results.pose_landmarks.landmark
-                    
-                    # Get coordinates
-                    hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
-                    knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
-                    ankle = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
-                    shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
-                        
-                    # Instantiate objects
-                    squat_angle_obj = Angle(ankle,knee,hip)
-                    squat_angle = squat_angle_obj.calculate_angle()
-                    
-                    back_angle_obj = Angle(knee,hip,shoulder)
-                    back_angle = back_angle_obj.calculate_angle()
-                    
-                    squat_obj = Rating(ankle,knee,hip)
-                    squat_percentage = squat_obj.calculate_rating_squat()
-                    
-                    back_obj = Rating(knee,hip,shoulder)
-                    back_percentage = back_obj.calculate_rating_squat_back()
-                    
-                    # Display Green or Red Message
-                    if squat_percentage >= 80 and back_percentage >= 70:
-                        cv2.putText(image, "Perfect!",
-                                        tuple(np.multiply(hip, [640, 480]).astype(int)), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 128, 0), 2, cv2.LINE_AA
-                                        )
-                    elif squat_percentage < 80 and squat_angle > 77:
-                        cv2.putText(image, "Lower your hip",
-                                        tuple(np.multiply(hip, [640, 480]).astype(int)), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
-                                            )
-                    elif squat_percentage < 80 and squat_angle < 77:
-                        cv2.putText(image, "Raise your hip",
-                                        tuple(np.multiply(hip, [640, 480]).astype(int)), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
-                                            )
-                    elif back_percentage < 70 and back_angle < 68:
-                        cv2.putText(image, "Move your back backward",
-                                        tuple(np.multiply(hip, [640, 480]).astype(int)), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
-                                            )
-                    elif back_percentage < 70 and back_angle > 68:
-                        cv2.putText(image, "Move your back forward",
-                                        tuple(np.multiply(hip, [640, 480]).astype(int)), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
-                                            )
-                    
-                    if squat_percentage >= 80 and back_percentage >= 70:
-                        stage = 'down'
-                    if squat_angle > 90 and stage == 'down':
-                        stage = 'up'
-                        cnt += 1
-                
-                    # Rectangle Setup on Top
-                    cv2.rectangle(image, (0,0), (10000,80), (245,117,16), -1)
-                    
-                    # Display Leg Accuarcy
-                    cv2.putText(image, 'Leg Accuarcy', (150,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(round(squat_percentage, 2)) + '%', 
-                                (150,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
-                    
-                    # Display Back Accuarcy
-                    cv2.putText(image, 'Back Accuarcy', (450,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(round(back_percentage, 2)) + '%', 
-                                (450,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
-                    
-                    # Curl Stage data
-                    cv2.putText(image, 'Squat Stage', (750,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, stage, 
-                                (750,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255,255,255), 2, cv2.LINE_AA)
-                    
-                    # Display Repetitions
-                    cv2.putText(image, 'Repetitions', (1050,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(cnt), 
-                                (1050,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255,255,255), 2, cv2.LINE_AA)
-                    
-                    # Show to screen
-                    ret, buffer = cv2.imencode('.jpg', image)
-                    image = buffer.tobytes()
-                    yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
-                except AttributeError:
-                    print("Attribute Error")
-        else:
-            return
+        image = frame.to_ndarray(format="bgr24")
 
-def flamingoRightMonitor(camera=False):
+        # Recolor image to RGB
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image.flags.writeable = False
+        
+        # Make Detections
+        results = pose.process(image)
+        
+        # Recolor back to BGR
+        image.flags.writeable = True
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        
+        # Draw landmarks
+        draw_styled_landmarks_squat_left(image, results)
+
+        try:
+
+            landmarks = results.pose_landmarks.landmark
+            
+            # Get coordinates
+            hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
+            knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+            ankle = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
+            shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
+
+        except Exception as e:
+            print(e)
+        
+        # Extract landmarks
+        try:
+                
+            # Instantiate objects
+            squat_angle_obj = Angle(ankle,knee,hip)
+            squat_angle = squat_angle_obj.calculate_angle()
+            
+            back_angle_obj = Angle(knee,hip,shoulder)
+            back_angle = back_angle_obj.calculate_angle()
+            
+            squat_obj = Rating(ankle,knee,hip)
+            squat_percentage = squat_obj.calculate_rating_squat()
+            
+            back_obj = Rating(knee,hip,shoulder)
+            back_percentage = back_obj.calculate_rating_squat_back()
+            
+            # Display Green or Red Message
+            if squat_percentage >= 80 and back_percentage >= 70:
+                cv2.putText(image, "Perfect!",
+                                tuple(np.multiply(hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 128, 0), 2, cv2.LINE_AA
+                                )
+            elif squat_percentage < 80 and squat_angle > 77:
+                cv2.putText(image, "Lower your hip",
+                                tuple(np.multiply(hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
+                                    )
+            elif squat_percentage < 80 and squat_angle < 77:
+                cv2.putText(image, "Raise your hip",
+                                tuple(np.multiply(hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
+                                    )
+            elif back_percentage < 70 and back_angle < 68:
+                cv2.putText(image, "Move your back backward",
+                                tuple(np.multiply(hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
+                                    )
+            elif back_percentage < 70 and back_angle > 68:
+                cv2.putText(image, "Move your back forward",
+                                tuple(np.multiply(hip, [640, 480]).astype(int)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2, cv2.LINE_AA
+                                    )
+            
+            if squat_percentage >= 80 and back_percentage >= 70:
+                stage = 'down'
+            if squat_angle > 90 and stage == 'down':
+                stage = 'up'
+                cnt += 1
+        
+            # Rectangle Setup on Top
+            cv2.rectangle(image, (0,0), (1000,80), (245,117,16), -1)
+            
+            # Display Leg Accuarcy
+            cv2.putText(image, 'Leg Accuarcy', (25,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(round(squat_percentage, 2)) + '%', 
+                        (25,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
+            
+            # Display Back Accuarcy
+            cv2.putText(image, 'Back Accuarcy', (175,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(round(back_percentage, 2)) + '%', 
+                        (175,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
+            
+            # Curl Stage data
+            cv2.putText(image, 'Squat Stage', (325,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, stage, 
+                        (325,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
+            
+            # Display Repetitions
+            cv2.putText(image, 'Repetitions', (475,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(cnt), 
+                        (475,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
+            
+        except AttributeError as e:
+            print(e)
+        new_frame = VideoFrame.from_ndarray(image, format="bgr24")
+        new_frame.pts = frame.pts
+        new_frame.time_base = frame.time_base
+        return new_frame
+
+def flamingoRightMonitor(frame):
     # Flamingo Right
 
     # Access mediapipe model
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
     # Set mediapipe model 
-        if camera == True:
-            cap = cv2.VideoCapture(0)
-            while cap.isOpened():
 
-                # Read feed
-                ret, frame = cap.read()
+        image = frame.to_ndarray(format="bgr24")
 
-                # Recolor image to RGB
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                image.flags.writeable = False
-                
-                # Make Detections
-                results = pose.process(image)
-                
-                # Recolor back to BGR
-                image.flags.writeable = True
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                
-                # Draw landmarks
-                draw_styled_landmarks_flamingo_right(image, results)
-                
-                # Extract landmarks
-                try:
-                    landmarks = results.pose_landmarks.landmark
-                    
-                    # Get coordinates
-                    hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
-                    knee = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
-                    ankle = [landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y]
-                    
-                    # Calculate percentage
-                    obj = Rating(ankle,knee,hip)
-                    angle = obj.calculate_angle()
-                    percentage = obj.calculate_rating_flamingo()
-                    
-                    if percentage >= 80 or angle < 34.53:
-                        cv2.putText(image, "Perfect!", 
-                                    tuple(np.multiply(knee, [640, 480]).astype(int)), 
-                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 128, 0), 2, cv2.LINE_AA
-                                        )
-                    else:
-                        cv2.putText(image, "Please move your leg higher", 
-                                tuple(np.multiply(knee, [640, 480]).astype(int)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
-                                        )
-                
-                    # Rectangle Setup on Top
-                    cv2.rectangle(image, (0,0), (10000,80), (245,117,16), -1)
-                    
-                    # Display Accuarcy
-                    cv2.putText(image, 'Flamingo Accuarcy', (575,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(round(percentage, 2)) + '%', 
-                                (575,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
-                
-                    # Show to screen
-                    ret, buffer = cv2.imencode('.jpg', image)
-                    image = buffer.tobytes()
-                    yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
-                except AttributeError:
-                    print("Attribute Error")
-        else:
-            return
+        # Recolor image to RGB
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image.flags.writeable = False
+        
+        # Make Detections
+        results = pose.process(image)
+        
+        # Recolor back to BGR
+        image.flags.writeable = True
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        
+        # Draw landmarks
+        draw_styled_landmarks_flamingo_right(image, results)
 
-def flamingoLeftMonitor(camera=False):
+        try:
+
+            landmarks = results.pose_landmarks.landmark
+            
+            # Get coordinates
+            hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
+            knee = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
+            ankle = [landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y]
+            
+        except Exception as e:
+            print(e)
+        
+        # Extract landmarks
+        try:
+            
+            # Calculate percentage
+            obj = Rating(ankle,knee,hip)
+            angle = obj.calculate_angle()
+            percentage = obj.calculate_rating_flamingo()
+            
+            if percentage >= 80 or angle < 34.53:
+                cv2.putText(image, "Perfect!", 
+                            tuple(np.multiply(knee, [640, 480]).astype(int)), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 128, 0), 2, cv2.LINE_AA
+                                )
+            else:
+                cv2.putText(image, "Please move your leg higher", 
+                        tuple(np.multiply(knee, [640, 480]).astype(int)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                                )
+        
+            # Rectangle Setup on Top
+            cv2.rectangle(image, (0,0), (1000,80), (245,117,16), -1)
+            
+            # Display Accuarcy
+            cv2.putText(image, 'Flamingo Accuarcy', (250,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(round(percentage, 2)) + '%', 
+                        (250,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
+        
+        except AttributeError as e:
+            print(e)
+        new_frame = VideoFrame.from_ndarray(image, format="bgr24")
+        new_frame.pts = frame.pts
+        new_frame.time_base = frame.time_base
+        return new_frame
+
+def flamingoLeftMonitor(frame):
     # Flamingo Left
 
     # Access mediapipe model
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
-    # Set mediapipe model 
-        if camera == True:
-            cap = cv2.VideoCapture(0)
-            while cap.isOpened():
 
-                # Read feed
-                ret, frame = cap.read()
+        image = frame.to_ndarray(format="bgr24")
 
-                # Recolor image to RGB
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                image.flags.writeable = False
-                
-                # Make Detections
-                results = pose.process(image)
-                
-                # Recolor back to BGR
-                image.flags.writeable = True
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                
-                # Draw landmarks
-                draw_styled_landmarks_flamingo_left(image, results)
-                
-                # Extract landmarks
-                try:
-                    landmarks = results.pose_landmarks.landmark
-                    
-                    # Get coordinates
-                    hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
-                    knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
-                    ankle = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
-                    
-                    # Calculate percentage
-                    obj = Rating(ankle,knee,hip)
-                    angle = obj.calculate_angle()
-                    percentage = obj.calculate_rating_flamingo()
-                    
-                    if percentage > 80 or angle < 34.53:
-                        cv2.putText(image, "Perfect!", 
-                                    tuple(np.multiply(knee, [640, 480]).astype(int)), 
-                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 128, 0), 2, cv2.LINE_AA
-                                        )
-                    else:
-                        cv2.putText(image, "Please move your leg higher", 
-                                tuple(np.multiply(knee, [640, 480]).astype(int)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
-                                        )
-                
-                    # Rectangle Setup on Top
-                    cv2.rectangle(image, (0,0), (10000,80), (245,117,16), -1)
-                    
-                    # Display Accuarcy
-                    cv2.putText(image, 'Flamingo Accuarcy', (575,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(round(percentage, 2)) + '%', 
-                                (575,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
-                
-                    # Show to screen
-                    ret, buffer = cv2.imencode('.jpg', image)
-                    image = buffer.tobytes()
-                    yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
-                except AttributeError:
-                    print("Attribute Error")
-        else:
-            return
+        # Recolor image to RGB
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image.flags.writeable = False
+        
+        # Make Detections
+        results = pose.process(image)
+        
+        # Recolor back to BGR
+        image.flags.writeable = True
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        
+        # Draw landmarks
+        draw_styled_landmarks_flamingo_left(image, results)
 
-def splitsRightMonitor(camera=False):
+        try:
+
+            landmarks = results.pose_landmarks.landmark
+            
+            # Get coordinates
+            hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
+            knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+            ankle = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
+
+        except Exception as e:
+            print(e)
+        
+        # Extract landmarks
+        try:
+            
+            # Calculate percentage
+            obj = Rating(ankle,knee,hip)
+            angle = obj.calculate_angle()
+            percentage = obj.calculate_rating_flamingo()
+            
+            if percentage > 80 or angle < 34.53:
+                cv2.putText(image, "Perfect!", 
+                            tuple(np.multiply(knee, [640, 480]).astype(int)), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 128, 0), 2, cv2.LINE_AA
+                                )
+            else:
+                cv2.putText(image, "Please move your leg higher", 
+                        tuple(np.multiply(knee, [640, 480]).astype(int)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                                )
+        
+            # Rectangle Setup on Top
+            cv2.rectangle(image, (0,0), (1000,80), (245,117,16), -1)
+            
+            # Display Accuarcy
+            cv2.putText(image, 'Flamingo Accuarcy', (250,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(round(percentage, 2)) + '%', 
+                        (250,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
+        
+        except AttributeError as e:
+            print(e)
+        new_frame = VideoFrame.from_ndarray(image, format="bgr24")
+        new_frame.pts = frame.pts
+        new_frame.time_base = frame.time_base
+        return new_frame
+
+def splitsRightMonitor(frame):
     # Splits Right
 
     # Access mediapipe model
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
     # Set mediapipe model
-        if camera == True:
-            cap = cv2.VideoCapture(0)
-            while cap.isOpened():
 
-                # Read feed
-                ret, frame = cap.read()
+        image = frame.to_ndarray(format="bgr24")
 
-                # Recolor image to RGB
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                image.flags.writeable = False
+        # Recolor image to RGB
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image.flags.writeable = False
+        
+        # Make Detections
+        results = pose.process(image)
+        
+        # Recolor back to BGR
+        image.flags.writeable = True
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        
+        # Draw landmarks
+        draw_styled_landmarks_side_splits_right(image, results)
+
+        try:
+
+            landmarks = results.pose_landmarks.landmark
+            
+            # Get coordinates
+            right_ankle = [landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y]
+            right_hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
+            left_hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
+            right_knee = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
+            left_knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+            left_shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
+
+        except Exception as e:
+            print(e)
+        
+        # Extract landmarks
+        try:
+            
+            # Calculate percentage
+            obj_right_1 = Rating(right_knee,right_hip,left_hip)
+            right_percentage_1 = obj_right_1.calculate_rating_splits()
+
+            obj_right_2 = Rating(right_ankle,right_knee,right_hip)
+            right_percentage_2 = obj_right_2.calculate_rating_splits()
+            
+            obj_left_1 = Rating(left_knee,left_hip,right_hip)
+            left_percentage_1 = obj_left_1.calculate_rating_splits()
+            
+            percentage = (right_percentage_1 + right_percentage_2 + left_percentage_1)/3
+            
+            obj = Rating(right_knee,right_hip,left_shoulder)
+            back_angle = obj.calculate_angle()
+            back_percentage = obj.calculate_rating_splits_back()
+            
+            # Display Green or Red Message
+            if percentage >= 85 and back_percentage >= 80:
+                cv2.putText(image, "Perfect!", 
+                        tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 128, 0), 2, cv2.LINE_AA
+                                )
+            elif back_percentage < 80 and back_angle > 90:
+                cv2.putText(image, "Move your back forward", 
+                        tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                            )
+            elif back_percentage < 80 and back_angle < 90:
+                cv2.putText(image, "Move your back backward", 
+                        tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                            )
+            else:
+                cv2.putText(image, "Lower your legs", 
+                        tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                                )
+                    
+            # Rectangle Setup on Top
+            cv2.rectangle(image, (0,0), (10000,80), (245,117,16), -1)
+            
+            # Display Leg Accuarcy
+            cv2.putText(image, 'Split Accuarcy', (200,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(round(percentage, 2)) + '%', 
+                        (200,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
+                    
+            # Display Back Accuarcy
+            cv2.putText(image, 'Back Accuarcy', (400,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(round(back_percentage, 2)) + '%', 
+                        (400,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
+
+        except AttributeError as e:
+            print(e)
+        new_frame = VideoFrame.from_ndarray(image, format="bgr24")
+        new_frame.pts = frame.pts
+        new_frame.time_base = frame.time_base
+        return new_frame
                 
-                # Make Detections
-                results = pose.process(image)
-                
-                # Recolor back to BGR
-                image.flags.writeable = True
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                
-                # Draw landmarks
-                draw_styled_landmarks_side_splits_right(image, results)
-                
-                # Extract landmarks
-                try:
-                    landmarks = results.pose_landmarks.landmark
-                    
-                    # Get coordinates
-                    right_ankle = [landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y]
-                    right_hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
-                    left_hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
-                    right_knee = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
-                    left_knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
-                    left_shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
 
-                    # Calculate percentage
-                    obj_right_1 = Rating(right_knee,right_hip,left_hip)
-                    right_percentage_1 = obj_right_1.calculate_rating_splits()
-
-                    obj_right_2 = Rating(right_ankle,right_knee,right_hip)
-                    right_percentage_2 = obj_right_2.calculate_rating_splits()
-                    
-                    obj_left_1 = Rating(left_knee,left_hip,right_hip)
-                    left_percentage_1 = obj_left_1.calculate_rating_splits()
-                    
-                    percentage = (right_percentage_1 + right_percentage_2 + left_percentage_1)/3
-                    
-                    obj = Rating(right_knee,right_hip,left_shoulder)
-                    back_angle = obj.calculate_angle()
-                    back_percentage = obj.calculate_rating_splits_back()
-                    
-                    # Display Green or Red Message
-                    if percentage >= 85 and back_percentage >= 80:
-                        cv2.putText(image, "Perfect!", 
-                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 128, 0), 2, cv2.LINE_AA
-                                        )
-                    elif back_percentage < 80 and back_angle > 90:
-                        cv2.putText(image, "Move your back forward", 
-                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
-                                    )
-                    elif back_percentage < 80 and back_angle < 90:
-                        cv2.putText(image, "Move your back backward", 
-                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
-                                    )
-                    else:
-                        cv2.putText(image, "Lower your legs", 
-                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
-                                        )
-                            
-                    # Rectangle Setup on Top
-                    cv2.rectangle(image, (0,0), (10000,80), (245,117,16), -1)
-                    
-                    # Display Leg Accuarcy
-                    cv2.putText(image, 'Split Accuarcy', (300,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(round(percentage, 2)) + '%', 
-                                (300,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
-                            
-                    # Display Back Accuarcy
-                    cv2.putText(image, 'Back Accuarcy', (800,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(round(back_percentage, 2)) + '%', 
-                                (800,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
-
-                    # Show to screen
-                    ret, buffer = cv2.imencode('.jpg', image)
-                    image = buffer.tobytes()
-                    yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
-                except AttributeError:
-                    print("Attribute Error")
-        else:
-            return
-
-def splitsLeftMonitor(camera=False):
+def splitsLeftMonitor(frame):
     # Splits Right
 
     # Access mediapipe model
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
     # Set mediapipe model
-        if camera == True:
-            cap = cv2.VideoCapture(0)
-            while cap.isOpened():
 
-                # Read feed
-                ret, frame = cap.read()
+        image = frame.to_ndarray(format="bgr24")
 
-                # Recolor image to RGB
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                image.flags.writeable = False
+        # Recolor image to RGB
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image.flags.writeable = False
+        
+        # Make Detections
+        results = pose.process(image)
+        
+        # Recolor back to BGR
+        image.flags.writeable = True
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        
+        # Draw landmarks
+        draw_styled_landmarks_side_splits_right(image, results)
+
+        try:
+
+            landmarks = results.pose_landmarks.landmark
+            
+            # Get coordinates
+            left_ankle = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
+            right_hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
+            left_hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
+            right_knee = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
+            left_knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+            right_shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
+
+        except Exception as e:
+            print(e)
+        
+        # Extract landmarks
+        try:
+
+            # Calculate percentage
+            obj_right = Rating(right_knee,right_hip,left_hip)
+            right_percentage = obj_right.calculate_rating_splits()
+            
+            obj_left_1 = Rating(left_knee,left_hip,right_hip)
+            left_percentage_1 = obj_left_1.calculate_rating_splits()
+
+            obj_left_2 = Rating(left_ankle, left_knee, left_hip)
+            left_percentage_2 = obj_left_2.calculate_rating_splits()
+            
+            percentage = (right_percentage + left_percentage_1 + left_percentage_2)/3
+            
+            obj = Rating(left_knee,left_hip,right_shoulder)
+            back_angle = obj.calculate_angle()
+            back_percentage = obj.calculate_rating_splits_back()
+            
+            # Display Green or Red Message
+            if percentage >= 85 and back_percentage >= 80:
+                cv2.putText(image, "Perfect!", 
+                        tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 128, 0), 2, cv2.LINE_AA
+                                )
+            elif back_percentage < 80 and back_angle > 90:
+                cv2.putText(image, "Move your back forward", 
+                        tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                            )
+            elif back_percentage < 80 and back_angle < 90:
+                cv2.putText(image, "Move your back backward", 
+                        tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                            )
+            else:
+                cv2.putText(image, "Lower your legs", 
+                        tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                                )
+                    
+            # Rectangle Setup on Top
+            cv2.rectangle(image, (0,0), (1000,80), (245,117,16), -1)
+            
+            # Display Leg Accuarcy
+            cv2.putText(image, 'Split Accuarcy', (200,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(round(percentage, 2)) + '%', 
+                        (200,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
+                    
+            # Display Back Accuarcy
+            cv2.putText(image, 'Back Accuarcy', (400,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(round(back_percentage, 2)) + '%', 
+                        (400,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
+
+        except AttributeError as e:
+            print(e)
+        new_frame = VideoFrame.from_ndarray(image, format="bgr24")
+        new_frame.pts = frame.pts
+        new_frame.time_base = frame.time_base
+        return new_frame
                 
-                # Make Detections
-                results = pose.process(image)
-                
-                # Recolor back to BGR
-                image.flags.writeable = True
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                
-                # Draw landmarks
-                draw_styled_landmarks_side_splits_right(image, results)
-                
-                # Extract landmarks
-                try:
-                    landmarks = results.pose_landmarks.landmark
-                    
-                    # Get coordinates
-                    left_ankle = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
-                    right_hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
-                    left_hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
-                    right_knee = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
-                    left_knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
-                    right_shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
 
-                    # Calculate percentage
-                    obj_right = Rating(right_knee,right_hip,left_hip)
-                    right_percentage = obj_right.calculate_rating_splits()
-                    
-                    obj_left_1 = Rating(left_knee,left_hip,right_hip)
-                    left_percentage_1 = obj_left_1.calculate_rating_splits()
-
-                    obj_left_2 = Rating(left_ankle, left_knee, left_hip)
-                    left_percentage_2 = obj_left_2.calculate_rating_splits()
-                    
-                    percentage = (right_percentage + left_percentage_1 + left_percentage_2)/3
-                    
-                    obj = Rating(left_knee,left_hip,right_shoulder)
-                    back_angle = obj.calculate_angle()
-                    back_percentage = obj.calculate_rating_splits_back()
-                    
-                    # Display Green or Red Message
-                    if percentage >= 85 and back_percentage >= 80:
-                        cv2.putText(image, "Perfect!", 
-                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 128, 0), 2, cv2.LINE_AA
-                                        )
-                    elif back_percentage < 80 and back_angle > 90:
-                        cv2.putText(image, "Move your back forward", 
-                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
-                                    )
-                    elif back_percentage < 80 and back_angle < 90:
-                        cv2.putText(image, "Move your back backward", 
-                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
-                                    )
-                    else:
-                        cv2.putText(image, "Lower your legs", 
-                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
-                                        )
-                            
-                    # Rectangle Setup on Top
-                    cv2.rectangle(image, (0,0), (10000,80), (245,117,16), -1)
-                    
-                    # Display Leg Accuarcy
-                    cv2.putText(image, 'Split Accuarcy', (300,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(round(percentage, 2)) + '%', 
-                                (300,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
-                            
-                    # Display Back Accuarcy
-                    cv2.putText(image, 'Back Accuarcy', (800,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(round(back_percentage, 2)) + '%', 
-                                (800,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
-
-                    # Show to screen
-                    ret, buffer = cv2.imencode('.jpg', image)
-                    image = buffer.tobytes()
-                    yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
-                except AttributeError:
-                    print("Attribute Error")
-        else:
-            return
-
-def frontSplitsMonitor(camera=False):
+def frontSplitsMonitor(frame):
     # Splits Right
 
     # Access mediapipe model
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
     # Set mediapipe model
-        if camera == True:
-            cap = cv2.VideoCapture(0)
-            while cap.isOpened():
 
-                # Read feed
-                ret, frame = cap.read()
+        image = frame.to_ndarray(format="bgr24")
 
-                # Recolor image to RGB
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                image.flags.writeable = False
-                
-                # Make Detections
-                results = pose.process(image)
-                
-                # Recolor back to BGR
-                image.flags.writeable = True
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                
-                # Draw landmarks
-                draw_styled_landmarks_side_splits_right(image, results)
-                
-                # Extract landmarks
-                try:
-                    landmarks = results.pose_landmarks.landmark
+        # Recolor image to RGB
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image.flags.writeable = False
+        
+        # Make Detections
+        results = pose.process(image)
+        
+        # Recolor back to BGR
+        image.flags.writeable = True
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        
+        # Draw landmarks
+        draw_styled_landmarks_side_splits_right(image, results)
+
+        try:
+
+            landmarks = results.pose_landmarks.landmark
+            
+            # Get coordinates
+            right_hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
+            left_hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
+            right_knee = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
+            left_knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+            left_shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
+            right_shoulder = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
+
+        except Exception as e:
+            print(e)
+        
+        # Extract landmarks
+        try:
+
+            # Calculate percentage
+            obj_right = Rating(right_knee,right_hip,left_hip)
+            right_percentage = obj_right.calculate_rating_splits()
+            
+            obj_left = Rating(left_knee,left_hip,right_hip)
+            left_percentage = obj_left.calculate_rating_splits()
+            
+            percentage = (right_percentage + left_percentage)/2
+            
+            obj_right = Rating(right_knee,right_hip,right_shoulder)
+            obj_left = Rating(left_knee,left_hip,left_shoulder)
+            back_right_angle = obj_right.calculate_angle()
+            back_left_angle = obj_left.calculate_angle()
+            back_angle = (back_right_angle + back_left_angle) / 2
+            back_percentage = (obj_right.calculate_rating_splits_back() + obj_left.calculate_rating_splits_back())/2
+            
+            # Display Green or Red Message
+            if percentage >= 80 and back_percentage >= 80:
+                cv2.putText(image, "Perfect!", 
+                        tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 128, 0), 2, cv2.LINE_AA
+                                )
+            elif back_percentage < 80 and back_angle > 90:
+                cv2.putText(image, "Move your back forward", 
+                        tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                            )
+            elif back_percentage < 80 and back_angle < 90:
+                cv2.putText(image, "Move your back backward", 
+                        tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                            )
+            else:
+                cv2.putText(image, "Lower your legs", 
+                        tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
+                                )
                     
-                    # Get coordinates
-                    right_hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
-                    left_hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
-                    right_knee = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
-                    left_knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x,landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
-                    left_shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
-                    right_shoulder = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
-
-                    # Calculate percentage
-                    obj_right = Rating(right_knee,right_hip,left_hip)
-                    right_percentage = obj_right.calculate_rating_splits()
+            # Rectangle Setup on Top
+            cv2.rectangle(image, (0,0), (1000,80), (245,117,16), -1)
+            
+            # Display Leg Accuarcy
+            cv2.putText(image, 'Split Accuarcy', (200,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(round(percentage, 2)) + '%', 
+                        (200,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
                     
-                    obj_left = Rating(left_knee,left_hip,right_hip)
-                    left_percentage = obj_left.calculate_rating_splits()
-                    
-                    percentage = (right_percentage + left_percentage)/2
-                    
-                    obj_right = Rating(right_knee,right_hip,right_shoulder)
-                    obj_left = Rating(left_knee,left_hip,left_shoulder)
-                    back_right_angle = obj_right.calculate_angle()
-                    back_left_angle = obj_left.calculate_angle()
-                    back_angle = (back_right_angle + back_left_angle) / 2
-                    back_percentage = (obj_right.calculate_rating_splits_back() + obj_left.calculate_rating_splits_back())/2
-                    
-                    # Display Green or Red Message
-                    if percentage >= 80 and back_percentage >= 80:
-                        cv2.putText(image, "Perfect!", 
-                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 128, 0), 2, cv2.LINE_AA
-                                        )
-                    elif back_percentage < 80 and back_angle > 90:
-                        cv2.putText(image, "Move your back forward", 
-                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
-                                    )
-                    elif back_percentage < 80 and back_angle < 90:
-                        cv2.putText(image, "Move your back backward", 
-                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
-                                    )
-                    else:
-                        cv2.putText(image, "Lower your legs", 
-                                tuple(np.multiply(left_hip, [640, 480]).astype(int)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA
-                                        )
-                            
-                    # Rectangle Setup on Top
-                    cv2.rectangle(image, (0,0), (10000,80), (245,117,16), -1)
-                    
-                    # Display Leg Accuarcy
-                    cv2.putText(image, 'Split Accuarcy', (300,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(round(percentage, 2)) + '%', 
-                                (300,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
-                            
-                    # Display Back Accuarcy
-                    cv2.putText(image, 'Back Accuarcy', (800,12), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(round(back_percentage, 2)) + '%', 
-                                (800,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,127,250), 2, cv2.LINE_AA)
+            # Display Back Accuarcy
+            cv2.putText(image, 'Back Accuarcy', (400,12), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+            cv2.putText(image, str(round(back_percentage, 2)) + '%', 
+                        (400,60), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
 
-                    # Show to screen
-                    ret, buffer = cv2.imencode('.jpg', image)
-                    image = buffer.tobytes()
-                    yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + image + b'\r\n')
-                except AttributeError:
-                    print("Attribute Error")
-        else:
-            return
+        except AttributeError as e:
+            print(e)
+        new_frame = VideoFrame.from_ndarray(image, format="bgr24")
+        new_frame.pts = frame.pts
+        new_frame.time_base = frame.time_base
+        return new_frame
 
-conditions = [False] * 9
+play = [False] * 9
 
-@app.route('/')
-def launch():
-    bicepCurlRightMonitor(False)
-    bicepCurlLeftMonitor(False)
-    squatsRightMonitor(False)
-    squatsLeftMonitor(False)
-    flamingoRightMonitor(False)
-    flamingoLeftMonitor(False)
-    splitsRightMonitor(False)
-    splitsLeftMonitor(False)
-    frontSplitsMonitor(False)
-    return app.send_static_file('index.html')
+@routes.get('/')
+async def launch(request):
+    content = open(os.path.join(ROOT, "static/index.html"), "r").read()
+    return web.Response(content_type="text/html", text=content)
 
-@app.route('/index.html')
-def index():
-    bicepCurlRightMonitor(False)
-    bicepCurlLeftMonitor(False)
-    squatsRightMonitor(False)
-    squatsLeftMonitor(False)
-    flamingoRightMonitor(False)
-    flamingoLeftMonitor(False)
-    splitsRightMonitor(False)
-    splitsLeftMonitor(False)
-    frontSplitsMonitor(False)
-    return app.send_static_file('index.html')
+@routes.get('/index.html')
+async def launch(request):
+    content = open(os.path.join(ROOT, "static/index.html"), "r").read()
+    return web.Response(content_type="text/html", text=content)
 
-@app.route('/bicepcurlmonitor.html')
-def launchBicepCurlMonitor():
-    return app.send_static_file('bicepcurlmonitor.html')
+@routes.get('/bicepcurlmonitor.html')
+def launchBicepCurlMonitor(request):
+    content = open(os.path.join(ROOT, "static/bicepcurlmonitor.html"), "r").read()
+    return web.Response(content_type="text/html", text=content)
 
-@app.route('/squatsmonitor.html')
-def launchSquatsMonitor():
-    return app.send_static_file('squatsmonitor.html')
+@routes.get('/squatsmonitor.html')
+def launchSquatsMonitor(request):
+    content = open(os.path.join(ROOT, "static/squatsmonitor.html"), "r").read()
+    play[0] = False
+    return web.Response(content_type="text/html", text=content)
 
-@app.route('/flamingomonitor.html')
-def launchFlamingoMonitor():
-    return app.send_static_file('flamingomonitor.html')
+@routes.get('/flamingomonitor.html')
+def launchFlamingoMonitor(request):
+    content = open(os.path.join(ROOT, "static/flamingomonitor.html"), "r").read()
+    return web.Response(content_type="text/html", text=content)
 
-@app.route('/splitsmonitor.html')
-def launchSplitsMonitor():
-    return app.send_static_file('splitsmonitor.html')
+@routes.get('/splitsmonitor.html')
+def launchSplitsMonitor(request):
+    content = open(os.path.join(ROOT, "static/splitsmonitor.html"), "r").read()
+    return web.Response(content_type="text/html", text=content)
 
-@app.route('/bicepcurlmonitorright.html/camera=False')
-def launchBicepCurlMonitorRightOff():
-    conditions[2] = False
-    return render_template('bicepcurlmonitorright.html')
+@routes.get('/squatsmonitorright.html')
+def launchSquatsMonitorRight(request):
+    content = open(os.path.join(ROOT, "templates/squatsmonitorright.html"), "r").read()
+    for i in range(9):
+        play[i] = False
+    play[0] = True
+    return web.Response(content_type="text/html", text=content)
 
-@app.route('/bicepcurlmonitorright.html/camera=True')
-def launchBicepCurlMonitorRightOn():
-    conditions[2] = True
-    return render_template('bicepcurlmonitorright.html')
+@routes.get('/squatsmonitorleft.html')
+def launchSquatsMonitorLeft(request):
+    content = open(os.path.join(ROOT, "templates/squatsmonitorleft.html"), "r").read()
+    for i in range(9):
+        play[i] = False
+    play[1] = True
+    return web.Response(content_type="text/html", text=content)
 
-@app.route('/bicepcurlmonitorleft.html/camera=False')
-def launchBicepCurlMonitorLeftOff():
-    conditions[3] = False
-    return render_template('bicepcurlmonitorleft.html')
+@routes.get('/bicepcurlmonitorright.html')
+def launchBicepCurlMonitorRight(request):
+    content = open(os.path.join(ROOT, "templates/bicepcurlmonitorright.html"), "r").read()
+    for i in range(9):
+        play[i] = False
+    play[2] = True
+    return web.Response(content_type="text/html", text=content)
 
-@app.route('/bicepcurlmonitorleft.html/camera=True')
-def launchBicepCurlMonitorLeftOn():
-    conditions[3] = True
-    return render_template('bicepcurlmonitorleft.html')
+@routes.get('/bicepcurlmonitorleft.html')
+def launchBicepCurlMonitorLeft(request):
+    content = open(os.path.join(ROOT, "templates/bicepcurlmonitorleft.html"), "r").read()
+    for i in range(9):
+        play[i] = False
+    play[3] = True
+    return web.Response(content_type="text/html", text=content)
 
-@app.route('/squatsmonitorright.html/camera=False')
-def launchSquatsMonitorRightOff():
-    conditions[0] = False
-    return render_template('squatsmonitorright.html')
+@routes.get('/flamingomonitorright.html')
+def launchFlamingoMonitorRight(request):
+    content = open(os.path.join(ROOT, "templates/flamingomonitorright.html"), "r").read()
+    for i in range(9):
+        play[i] = False
+    play[4] = True
+    return web.Response(content_type="text/html", text=content)
 
-@app.route('/squatsmonitorright.html/camera=True')
-def launchSquatsMonitorRightOn():
-    conditions[0] = True
-    return render_template('squatsmonitorright.html')
+@routes.get('/flamingomonitorleft.html')
+def launchFlamingoMonitorLeft(request):
+    content = open(os.path.join(ROOT, "templates/flamingomonitorleft.html"), "r").read()
+    for i in range(9):
+        play[i] = False
+    play[5] = True
+    return web.Response(content_type="text/html", text=content)
 
-@app.route('/squatsmonitorleft.html/camera=False')
-def launchSquatsMonitorLeftOff():
-    conditions[1] = False
-    return render_template('squatsmonitorleft.html')
+@routes.get('/frontsplitsmonitor.html')
+def launchFrontSplitsMonitor(request):
+    content = open(os.path.join(ROOT, "templates/frontsplitsmonitor.html"), "r").read()
+    for i in range(9):
+        play[i] = False
+    play[6] = True
+    return web.Response(content_type="text/html", text=content)
 
-@app.route('/squatsmonitorleft.html/camera=True')
-def launchSquatsMonitorLeftOn():
-    conditions[1] = True
-    return render_template('squatsmonitorleft.html')
-
-@app.route('/flamingomonitorright.html/camera=False')
-def launchFlamingoMonitorRightOff():
-    conditions[7] = False
-    return render_template('flamingomonitorright.html')
-
-@app.route('/flamingomonitorright.html/camera=True')
-def launchFlamingoMonitorRightOn():
-    conditions[7] = True
-    return render_template('flamingomonitorright.html')
-
-@app.route('/flamingomonitorleft.html/camera=False')
-def launchFlamingoMonitorLeftOff():
-    conditions[8] = False
-    return render_template('flamingomonitorleft.html')
-
-@app.route('/flamingomonitorleft.html/camera=True')
-def launchFlamingoMonitorLeftOn():
-    conditions[8] = True
-    return render_template('flamingomonitorleft.html')
-
-@app.route('/frontsplitsmonitor.html/camera=False')
-def launchFrontSplitsMonitorOff():
-    conditions[4] = False
-    return render_template('frontsplitsmonitor.html')
-
-@app.route('/frontsplitsmonitor.html/camera=True')
-def launchFrontSplitsMonitorOn():
-    conditions[4] = True
-    return render_template('frontsplitsmonitor.html')
-
-@app.route('/splitsmonitorright.html/camera=False')
-def launchSplitsMonitorRightOff():
-    conditions[5] = False
-    return render_template('splitsmonitorright.html')
+@routes.get('/splitsmonitorright.html')
+def launchSplitsMonitorRight(request):
+    content = open(os.path.join(ROOT, "templates/splitsmonitorright.html"), "r").read()
+    for i in range(9):
+        play[i] = False
+    play[7] = True
+    return web.Response(content_type="text/html", text=content)
     
-@app.route('/splitsmonitorright.html/camera=True')
-def launchSplitsMonitorRightOn():
-    conditions[5] = True
-    return render_template('splitsmonitorright.html')
-
-@app.route('/splitsmonitorleft.html/camera=False')
-def launchSplitsMonitorLeftOff():
-    conditions[6] = False
-    return render_template('splitsmonitorleft.html')
-
-@app.route('/splitsmonitorleft.html/camera=True')
-def launchSplitsMonitorLeftOn():
-    conditions[6] = True
-    return render_template('splitsmonitorleft.html')
-
-@app.route('/bicepcurlrightvideo')
-def bicepCurlRightVideo():
-    return Response(bicepCurlRightMonitor(conditions[2]), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-@app.route('/bicepcurlleftvideo')
-def bicepCurlLeftVideo():
-    return Response(bicepCurlLeftMonitor(conditions[3]), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-@app.route('/squatsrightvideo')
-def squatsRightVideo(): 
-    return Response(squatsRightMonitor(conditions[0]), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-@app.route('/squatsleftvideo')
-def squatsLeftVideo():
-    return Response(squatsLeftMonitor(conditions[1]), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-@app.route('/flamingorightvideo')
-def flamingoRightVideo():
-    return Response(flamingoRightMonitor(conditions[7]), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-@app.route('/flamingoleftvideo')
-def flamingoLeftVideo():
-    return Response(flamingoLeftMonitor(conditions[8]), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-@app.route('/frontsplitsvideo')
-def frontSplitsVideo():
-    return Response(frontSplitsMonitor(conditions[4]), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-@app.route('/splitsrightvideo')
-def splitsRightVideo():
-    return Response(splitsRightMonitor(conditions[5]), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-@app.route('/splitsleftvideo')
-def splitsLeftVideo():
-    return Response(splitsLeftMonitor(conditions[6]), mimetype='multipart/x-mixed-replace; boundary=frame')
+@routes.get('/splitsmonitorleft.html')
+def launchSplitsMonitorLeft(request):
+    content = open(os.path.join(ROOT, "templates/splitsmonitorleft.html"), "r").read()
+    for i in range(9):
+        play[i] = False
+    play[8] = True
+    return web.Response(content_type="text/html", text=content)
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=8080, debug=True)
+    parser = argparse.ArgumentParser(
+        description="WebRTC audio / video / data-channels demo"
+    )
+    parser.add_argument("--cert-file", help="SSL certificate file (for HTTPS)")
+    parser.add_argument("--key-file", help="SSL key file (for HTTPS)")
+    parser.add_argument(
+        "--host", default="0.0.0.0", help="Host for HTTP server (default: 0.0.0.0)"
+    )
+    parser.add_argument(
+        "--port", type=int, default=8080, help="Port for HTTP server (default: 8080)"
+    )
+    parser.add_argument("--record-to", help="Write received media to a file."),
+    parser.add_argument("--verbose", "-v", action="count")
+    args = parser.parse_args()
+
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+
+    if args.cert_file:
+        ssl_context = ssl.SSLContext()
+        ssl_context.load_cert_chain(args.cert_file, args.key_file)
+    else:
+        ssl_context = None
+
+    app.add_routes(routes)
+    app.on_shutdown.append(on_shutdown)
+    # app.router.add_get("/", index)
+    app.router.add_get("/client.js", javascript)
+    app.router.add_post("/offer", offer)
+    web.run_app(
+        app, access_log=None, host=args.host, port=args.port, ssl_context=ssl_context
+    )
