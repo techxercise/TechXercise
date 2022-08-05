@@ -17,5 +17,5 @@ WORKDIR /app
 COPY . .
 
 EXPOSE 8080
+
 CMD ["python3", "app.py"]
-# CMD ["gunicorn", "app:app", "-b", ":8080", "--timeout", "300"]

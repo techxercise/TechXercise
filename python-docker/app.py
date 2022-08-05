@@ -1,5 +1,7 @@
 # Importing libraries
 
+import aiohttp_jinja2
+import jinja2
 import numpy as np
 import cv2
 import mediapipe as mp
@@ -17,9 +19,10 @@ from aiohttp import web
 from av import VideoFrame
 
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
-from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder, MediaRelay
+from aiortc.contrib.media import MediaBlackhole, MediaRecorder, MediaRelay
 
 app = web.Application() # Initialization
+aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('./templates'))
 routes = web.RouteTableDef()
 mp_drawing = mp.solutions.drawing_utils # Drawing Utilites
 mp_pose = mp.solutions.pose # Pose
@@ -63,16 +66,6 @@ class VideoTransformTrack(MediaStreamTrack):
         elif play[8]:
             frame = splitsLeftMonitor(frame)
         return frame
-
-async def index(request):
-    content = open(os.path.join(ROOT, "index.html"), "r").read()
-    return web.Response(content_type="text/html", text=content)
-
-
-async def javascript(request):
-    content = open(os.path.join(ROOT, "client.js"), "r").read()
-    return web.Response(content_type="application/javascript", text=content)
-
 
 async def offer(request):
     params = await request.json()
@@ -438,7 +431,7 @@ def bicepCurlRightMonitor(frame):
                         (475,60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
             
-        except AttributeError as e:
+        except Exception as e:
             print(e)
 
         new_frame = VideoFrame.from_ndarray(image, format="bgr24")
@@ -552,7 +545,7 @@ def bicepCurlLeftMonitor(frame):
                         (475,60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
             
-        except AttributeError as e:
+        except Exception as e:
             print(e)
         new_frame = VideoFrame.from_ndarray(image, format="bgr24")
         new_frame.pts = frame.pts
@@ -673,7 +666,7 @@ def squatsRightMonitor(frame):
             cv2.putText(image, str(cnt), 
                         (475,60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
-        except AttributeError as e:
+        except Exception as e:
             print(e)
         new_frame = VideoFrame.from_ndarray(image, format="bgr24")
         new_frame.pts = frame.pts
@@ -799,7 +792,7 @@ def squatsLeftMonitor(frame):
                         (475,60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
             
-        except AttributeError as e:
+        except Exception as e:
             print(e)
         new_frame = VideoFrame.from_ndarray(image, format="bgr24")
         new_frame.pts = frame.pts
@@ -870,7 +863,7 @@ def flamingoRightMonitor(frame):
                         (250,60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
         
-        except AttributeError as e:
+        except Exception as e:
             print(e)
         new_frame = VideoFrame.from_ndarray(image, format="bgr24")
         new_frame.pts = frame.pts
@@ -940,7 +933,7 @@ def flamingoLeftMonitor(frame):
                         (250,60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
         
-        except AttributeError as e:
+        except Exception as e:
             print(e)
         new_frame = VideoFrame.from_ndarray(image, format="bgr24")
         new_frame.pts = frame.pts
@@ -1043,7 +1036,7 @@ def splitsRightMonitor(frame):
                         (400,60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
 
-        except AttributeError as e:
+        except Exception as e:
             print(e)
         new_frame = VideoFrame.from_ndarray(image, format="bgr24")
         new_frame.pts = frame.pts
@@ -1147,7 +1140,7 @@ def splitsLeftMonitor(frame):
                         (400,60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
 
-        except AttributeError as e:
+        except Exception as e:
             print(e)
         new_frame = VideoFrame.from_ndarray(image, format="bgr24")
         new_frame.pts = frame.pts
@@ -1251,7 +1244,7 @@ def frontSplitsMonitor(frame):
                         (400,60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0,127,250), 2, cv2.LINE_AA)
 
-        except AttributeError as e:
+        except Exception as e:
             print(e)
         new_frame = VideoFrame.from_ndarray(image, format="bgr24")
         new_frame.pts = frame.pts
@@ -1262,33 +1255,33 @@ play = [False] * 9
 
 @routes.get('/')
 async def launch(request):
-    content = open(os.path.join(ROOT, "static/index.html"), "r").read()
+    content = open(os.path.join(ROOT, "templates/index.html"), "r").read()
     return web.Response(content_type="text/html", text=content)
 
 @routes.get('/index.html')
 async def launch(request):
-    content = open(os.path.join(ROOT, "static/index.html"), "r").read()
+    content = open(os.path.join(ROOT, "templates/index.html"), "r").read()
     return web.Response(content_type="text/html", text=content)
 
 @routes.get('/bicepcurlmonitor.html')
 def launchBicepCurlMonitor(request):
-    content = open(os.path.join(ROOT, "static/bicepcurlmonitor.html"), "r").read()
+    content = open(os.path.join(ROOT, "templates/bicepcurlmonitor.html"), "r").read()
     return web.Response(content_type="text/html", text=content)
 
 @routes.get('/squatsmonitor.html')
 def launchSquatsMonitor(request):
-    content = open(os.path.join(ROOT, "static/squatsmonitor.html"), "r").read()
+    content = open(os.path.join(ROOT, "templates/squatsmonitor.html"), "r").read()
     play[0] = False
     return web.Response(content_type="text/html", text=content)
 
 @routes.get('/flamingomonitor.html')
 def launchFlamingoMonitor(request):
-    content = open(os.path.join(ROOT, "static/flamingomonitor.html"), "r").read()
+    content = open(os.path.join(ROOT, "templates/flamingomonitor.html"), "r").read()
     return web.Response(content_type="text/html", text=content)
 
 @routes.get('/splitsmonitor.html')
 def launchSplitsMonitor(request):
-    content = open(os.path.join(ROOT, "static/splitsmonitor.html"), "r").read()
+    content = open(os.path.join(ROOT, "templates/splitsmonitor.html"), "r").read()
     return web.Response(content_type="text/html", text=content)
 
 @routes.get('/squatsmonitorright.html')
@@ -1390,10 +1383,10 @@ if __name__ == '__main__':
     else:
         ssl_context = None
 
+    STATIC_PATH = os.path.join(os.path.dirname(__file__), "static")    
+    app.router.add_static('/static/', STATIC_PATH, name='static')
     app.add_routes(routes)
     app.on_shutdown.append(on_shutdown)
-    # app.router.add_get("/", index)
-    app.router.add_get("/client.js", javascript)
     app.router.add_post("/offer", offer)
     web.run_app(
         app, access_log=None, host=args.host, port=args.port, ssl_context=ssl_context
